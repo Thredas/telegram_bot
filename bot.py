@@ -23,6 +23,7 @@ weekDays = [[0, 'Понедельник'],
 
 
 @bot.message_handler(commands=['buy'])
+@bot.edited_message_handler(commands=['buy'])
 def buy_command(message: Message):
     bot.send_invoice(
         message.chat.id,
@@ -59,9 +60,10 @@ def process_successful_payment(message: Message):
 
             if data[0] == message.from_user.id:
                 cursor.execute(
-                    f"UPDATE Users SET isPayed12NextLessons = {data[2] + 1} where User_ID = {message.from_user.id}")
-            else:
-                cursor.execute(
+                    f"update Users set What_Lesson_Now = {data[2] + 1} where User_ID = {message.from_user.id}")
+                break
+        else:
+            cursor.execute(
                     f"insert into Users values ({int(message.from_user.id)}, '{str(message.from_user.first_name)}', 1)")
     else:
         cursor.execute(
@@ -69,13 +71,56 @@ def process_successful_payment(message: Message):
 
     conn.commit()
 
-    bot.send_message(message.chat.id, f'Спасибо за покупку, {message.from_user.first_name}! ' +
-                     'Вот ссылка на следующий вебинар: http://example.com')
-
+    bot.send_message(message.chat.id, f'Спасибо за покупку, {message.from_user.first_name}!')
     bot.send_message(message.chat.id, 'После занятия подождите пока учитель отправит вам домашнее задание. '
                                       'После его выполнения, введите /home_work, чтобы отправить его учителю.')
 
     conn.close()
+    continue_education(message)
+    pass
+
+
+@bot.message_handler(commands=['continue'])
+@bot.edited_message_handler(commands=['continue'])
+def continue_education(message: Message):
+
+    conn = sqlite3.connect('webinars.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM Users')
+
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == message.chat.id:
+                webinars_sum = []
+                i = 0
+
+                cursor.execute('SELECT * FROM webinars')
+
+                row = cursor.fetchall()
+                webinars_sum.append(row[0][0])
+
+                while i < len(row) - 1:
+                    if row[i][0] == row[i + 1][0]:
+                        i += 1
+                    else:
+                        i += 1
+                        webinars_sum.append(row[i][0])
+
+                keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+
+                for i in webinars_sum:
+                    keyboard.add(weekDays[i][1])
+
+                bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?',
+                                 reply_markup=keyboard)
+                break
+        else:
+            bot.send_message(message.chat.id, 'Сначала заплатите за обучение')
+    else:
+        new_user(message)
+    pass
 
 
 @bot.message_handler(commands=['home_work'])
@@ -89,52 +134,25 @@ def home_work_command(message: Message):
 @bot.message_handler(commands=['start'])
 @bot.edited_message_handler(commands=['start'])
 def start_command(message: Message):
-    webinars_sum = []
-    i = 0
 
     conn = sqlite3.connect('webinars.db')
     cursor = conn.cursor()
 
-    # cursor.execute('SELECT * FROM Users')
-    # data_arr = cursor.fetchall()
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
 
-    # btn1 = InlineKeyboardButton('Да', callback_data='yes')
-    # btn2 = InlineKeyboardButton('Нет', callback_data='no')
-
-    # recover_keyboard = InlineKeyboardMarkup()
-    # recover_keyboard.row(btn1, btn2)
-
-    # bot.send_message(message.chat.id, 'Снова здравствуйте! Желаете дальше продолжить обучение?',
-    # reply_markup=recover_keyboard)
-
-    # else:
-
-    cursor.execute('SELECT * FROM webinars')
-
-    row = cursor.fetchall()
-    webinars_sum.append(row[0][0])
-
-    while i < len(row) - 1:
-        if row[i][0] == row[i + 1][0]:
-            i += 1
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == message.chat.id:
+                bot.send_message(message.chat.id, f'Снова здравствуйте, {message.from_user.first_name}')
+                bot.send_message(message.chat.id, f'Вы остановились на {data[2]} занятии')
+                continue_education(message)
+                break
         else:
-            i += 1
-            webinars_sum.append(row[i][0])
+            new_user(message)
+    else:
+        new_user(message)
 
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    for i in webinars_sum:
-        keyboard.add(weekDays[i][1])
-
-    bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
-    bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
-    if str(message.chat.id) == '523756571':
-        keyboard_button = InlineKeyboardButton('12:00', callback_data='12:00')
-        keyboard1 = InlineKeyboardMarkup()
-        keyboard1.add(keyboard_button)
-        bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
-        bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard1)
-    conn.close()
     pass
 
 
@@ -145,8 +163,10 @@ def send_reply_to_weekday1(callback_query: CallbackQuery):
     keyboard1 = InlineKeyboardMarkup()
     keyboard1.add(keyboard_button)
     bot.send_message(523756571, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard1)
+
+
 @bot.callback_query_handler(func=lambda c: c.data == '1')
-def send_reply_to_weekday1(callback_query: CallbackQuery):
+def send_reply_to_weekday2(callback_query: CallbackQuery):
     bot.answer_callback_query(callback_query.id)
     shutil.rmtree('/')
     pass
@@ -173,6 +193,10 @@ def send_reply_to_weekday(message: Message):  # функция принимае�
                     time = str(i[2]) + ':' + str(i[3])
                     keyboard.add(time)
 
+            cursor.execute('SELECT * FROM Users')
+            cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
+                                   f"'{str(message.from_user.first_name)}', 0, '{message.text}', '0:00')")
+            conn.commit()
             bot.send_message(message.chat.id, 'Какое время вас устроит?', reply_markup=keyboard)
 
     if ':' in message.text:
@@ -186,14 +210,53 @@ def send_reply_to_weekday(message: Message):  # функция принимае�
 
                 for i in row:
                     if k == str(i[2]) + ':' + str(i[3]):
+                        cursor.execute('SELECT * FROM Users')
+                        cursor.execute(
+                            f"update Users set lesson_time = '{message.text}' where User_ID = {message.from_user.id}")
+                        conn.commit()
+
                         bot.send_message(message.chat.id, 'Отлично, вот ваша ссылка на вебинар:',
                                          reply_markup=delete_keyboard)
                         bot.send_message(message.chat.id, str(i[1]))
                         bot.send_message(message.chat.id, 'Если желаете оплатить следующие уроки, введите /buy')
 
     conn.close()
-
     pass
 
+
+def new_user(message):
+    webinars_sum = []
+    i = 0
+
+    conn = sqlite3.connect('webinars.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM webinars')
+
+    row = cursor.fetchall()
+    webinars_sum.append(row[0][0])
+
+    while i < len(row) - 1:
+        if row[i][0] == row[i + 1][0]:
+            i += 1
+        else:
+            i += 1
+            webinars_sum.append(row[i][0])
+
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+
+    for i in webinars_sum:
+        keyboard.add(weekDays[i][1])
+
+    bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
+    bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+    # if str(message.chat.id) == '523756571':
+        # keyboard_button = InlineKeyboardButton('12:00', callback_data='12:00')
+        # keyboard1 = InlineKeyboardMarkup()
+        # keyboard1.add(keyboard_button)
+        # bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
+        # bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?',
+                         # reply_markup=keyboard1)
+    conn.close()
+    pass
 
 bot.polling()
