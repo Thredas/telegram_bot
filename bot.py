@@ -123,9 +123,24 @@ def weekday_pick(information, weekdayfromarr):
         if data[0] == weekdayfromarr[0]:
             keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
 
-    cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                   f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                   f" '0:00')")
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == information.from_user.id:
+                cursor.execute(
+                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' where user_id = {information.from_user.id}")
+                break
+        else:
+            cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                           f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                           f" '0:00')")
+    else:
+        cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                       f" '0:00')")
+
     conn.commit()
 
     bot.edit_message_text("На какое время вы хотели бы записаться?", information.message.chat.id,
@@ -155,8 +170,19 @@ def time_pick(information):
                     bot.edit_message_text("Отлично, вот ваша ссылка на вебинар: \n" + str(i[1]),
                                           information.message.chat.id,
                                           information.message.message_id)
-                    bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
-                                     reply_markup=keyboard)
+
+                    cursor.execute('SELECT * FROM Users')
+                    data_arr = cursor.fetchall()
+
+                    if len(data_arr) > 0:
+                        for data in data_arr:
+                            if data[2] == 0:
+                                bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
+                                                 reply_markup=keyboard)
+                                break
+                        else:
+                            bot.send_message(information.message.chat.id,
+                                             "Вкоре после занятия учитель отправит вам домашнее задание",)
 
 
 def buy(information):
@@ -220,7 +246,7 @@ def process_successful_payment(message: Message):
     bot.send_message(message.chat.id, f'Спасибо за покупку, {message.from_user.first_name}!')
     bot.send_message(message.chat.id, "Вы оплатили 12 следующих уроков. "
                                       'После каждого занятия учитель будет отправлять вам домашнее задание. '
-                                      'Когда вы его выполните, учитель поставит вам оценку, и обучение продолжиться до'
+                                      'Когда вы его выполните, учитель поставит вам оценку, и обучение продолжиться до '
                                       'тех пор, пока вы не побываете на 12 занятиях.')
     bot.send_message(message.chat.id, "Желаете записаться на следующее занятие?",
                      reply_markup=keyboard)
@@ -236,7 +262,28 @@ def continue_study(information):
             if data[0] == information.message.chat.id:
 
                 if data[2] < 13:
-                    print('yes')
+                    webinars_sum = []
+                    i = 0
+
+                    cursor.execute('SELECT * FROM webinars')
+
+                    row = cursor.fetchall()
+                    webinars_sum.append(row[0][0])
+
+                    while i < len(row) - 1:
+                        if row[i][0] == row[i + 1][0]:
+                            i += 1
+                        else:
+                            i += 1
+                            webinars_sum.append(row[i][0])
+
+                    keyboard = InlineKeyboardMarkup()
+
+                    for i in webinars_sum:
+                        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+
+                    bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
+                                          information.message.message_id, reply_markup=keyboard)
                     break
                 else:
                     buy(information)
