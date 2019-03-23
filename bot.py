@@ -50,9 +50,8 @@ def start_command(message: Message):
             if data[0] == message.chat.id:
                 keyboard = InlineKeyboardMarkup()
                 keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
-                bot.send_message(message.chat.id, f'Снова здравствуйте, {message.from_user.first_name}')
-                bot.send_message(message.chat.id, f'Вы остановились на {data[2]} занятии')
-                bot.send_message(message.chat.id, "Желаете записаться на него?",
+                bot.send_message(message.chat.id, f"Снова здравствуйте, {message.from_user.first_name}.\n\n"
+                                 f"Вы остановились на {data[2]} занятии. \nЖелаете записаться на него?",
                                  reply_markup=keyboard)
                 break
         else:
@@ -96,8 +95,6 @@ def new_user(message):
 def callback_handler(callback_query: CallbackQuery):
     bot.answer_callback_query(callback_query.id)
 
-    print('Callback data =', callback_query.data)
-
     for weekDay in weekDays:
         if callback_query.data == weekDay[1]:
             weekday_pick(callback_query, weekDay)
@@ -123,7 +120,24 @@ def callback_handler(callback_query: CallbackQuery):
 
 
 def weekday_pick(information, weekdayfromarr):
-    cursor.execute('SELECT * FROM webinars')
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == information.from_user.id:
+                if data[2] > 0:
+                    cursor.execute('SELECT * FROM paid_webinars')
+                    break
+                else:
+                    cursor.execute('SELECT * FROM webinars')
+                    break
+    else:
+        cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                       f" '0:00')")
+        cursor.execute('SELECT * FROM webinars')
+
     row = cursor.fetchall()
     keyboard = InlineKeyboardMarkup()
 
@@ -157,7 +171,19 @@ def weekday_pick(information, weekdayfromarr):
 
 def time_pick(information):
 
-    cursor.execute('SELECT * FROM webinars')
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == information.from_user.id:
+                if data[2] > 0:
+                    cursor.execute('SELECT * FROM paid_webinars')
+                    break
+                else:
+                    cursor.execute('SELECT * FROM webinars')
+                    break
+
     row = cursor.fetchall()
 
     time_arr = []
@@ -189,8 +215,29 @@ def time_pick(information):
                                                  reply_markup=keyboard)
                                 break
                         else:
+                            for data in data_arr:
+                                if data[0] == information.from_user.id:
+                                    cursor.execute('SELECT * FROM home_work')
+                                    data_arr2 = cursor.fetchall()
+
+                                    for data2 in data_arr2:
+                                        if data2[0] == information.from_user.id:
+                                            cursor.execute(
+                                                f"update home_work set lesson = '{data[2]}' "
+                                                f"where user_id = {information.from_user.id}")
+                                            break
+                                    else:
+                                        cursor.execute(
+                                            f"insert into home_work values ({int(information.from_user.id)}, "
+                                            f"'{str(information.from_user.first_name)}',"
+                                            f" {data[2]}, "
+                                            f"'Ожидается ссылка',"
+                                            f" 'Ожидается оценка')")
+                                    break
+
                             bot.send_message(information.message.chat.id,
-                                             "Вкоре после занятия учитель отправит вам домашнее задание",)
+                                             "Чтобы получить домашнее задание, введите /home_work",)
+                            conn.commit()
 
 
 def buy(information):
@@ -273,7 +320,7 @@ def continue_study(information):
                     webinars_sum = []
                     i = 0
 
-                    cursor.execute('SELECT * FROM webinars')
+                    cursor.execute('SELECT * FROM paid_webinars')
 
                     row = cursor.fetchall()
                     webinars_sum.append(row[0][0])
@@ -302,11 +349,49 @@ def continue_study(information):
     pass
 
 
-@app.route('/', methods=['POST'])
-def home_work():
-    data = json.loads(request.data)
-    print(data)
-    pass
+@bot.message_handler(commands=['home_work'])
+@bot.edited_message_handler(commands=['home_work'])
+def home_work(message: Message):
+    cursor.execute('SELECT * FROM home_work')
+    row = cursor.fetchall()
+
+    for data in row:
+
+        if data[0] == message.chat.id:
+            if data[3] == "Ожидается ссылка":
+                bot.send_message(message.chat.id,
+                                 "Учитель еще не отправил вам домашнее задание, повторите команду позднее")
+                break
+            else:
+                cursor.execute(
+                    f"update Users set lesson_Now = {data[2] + 1} where User_ID = {message.chat.id}")
+                cursor.execute(
+                    f"update home_work set hw_link = 'Ожидается ссылка' where user_id = {message.chat.id}")
+                bot.send_message(message.chat.id, f"Вот ваше д/з: \n{data[3]} \n\nЧтобы узнать оценку введите /grade")
+                conn.commit()
+                break
 
 
-bot.polling()
+@bot.message_handler(commands=['grade'])
+@bot.edited_message_handler(commands=['grade'])
+def grade(message: Message):
+    cursor.execute('SELECT * FROM home_work')
+    row = cursor.fetchall()
+
+    for data in row:
+
+        if data[0] == message.chat.id:
+            if data[4] == "Ожидается оценка":
+                bot.send_message(message.chat.id,
+                                 "Учитель еще не поставил вам оценку за домашнее задание, повторите команду позднее")
+                break
+            else:
+                bot.send_message(message.chat.id, f"Ваша оценка за последнее выполненное д/з: {data[4]}")
+
+                keyboard = InlineKeyboardMarkup()
+                keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+                bot.send_message(message.chat.id, f"Желаете записаться на следующее занятие?", reply_markup=keyboard)
+                break
+
+
+bot.polling(timeout=60)
