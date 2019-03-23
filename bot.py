@@ -120,6 +120,28 @@ def callback_handler(callback_query: CallbackQuery):
 
 
 def weekday_pick(information, weekdayfromarr):
+
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    if len(data_arr) > 0:
+        for data in data_arr:
+            if data[0] == information.from_user.id:
+                cursor.execute(
+                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' where user_id = {information.from_user.id}")
+                conn.commit()
+                break
+        else:
+            cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                           f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                           f" '0:00')")
+            conn.commit()
+    else:
+        cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                       f" '0:00')")
+        conn.commit()
+
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
@@ -132,41 +154,16 @@ def weekday_pick(information, weekdayfromarr):
                 else:
                     cursor.execute('SELECT * FROM webinars')
                     break
-            else:
-                cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                               f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                               f" '0:00')")
-                cursor.execute('SELECT * FROM webinars')
     else:
-        cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                       f" '0:00')")
         cursor.execute('SELECT * FROM webinars')
 
-    row = cursor.fetchall()
     keyboard = InlineKeyboardMarkup()
+
+    row = cursor.fetchall()
 
     for data in row:
         if data[0] == weekdayfromarr[0]:
             keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
-
-    cursor.execute('SELECT * FROM Users')
-    data_arr = cursor.fetchall()
-
-    if len(data_arr) > 0:
-        for data in data_arr:
-            if data[0] == information.from_user.id:
-                cursor.execute(
-                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' where user_id = {information.from_user.id}")
-                break
-        else:
-            cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                           f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                           f" '0:00')")
-    else:
-        cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                       f" '0:00')")
 
     conn.commit()
 
