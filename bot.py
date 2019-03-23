@@ -2,6 +2,7 @@ import os
 import mysql.connector
 import mysql.connector
 import telebot
+from flask import Flask, request, json
 from telebot.types import Message, \
      LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
@@ -28,6 +29,8 @@ weekDays = [[0, 'Понедельник'],
             [4, 'Пятница'],
             [5, 'Суббота'],
             [6, 'Воскресенье']]
+
+app = Flask(__name__)
 
 
 @bot.message_handler(commands=['start'])
@@ -185,6 +188,7 @@ def time_pick(information):
                                              "Вкоре после занятия учитель отправит вам домашнее задание",)
 
 
+
 def buy(information):
     bot.send_invoice(
         information.message.chat.id,
@@ -291,6 +295,13 @@ def continue_study(information):
         else:
             buy(information)
 
+    pass
+
+
+@app.route('/', methods=['POST'])
+def home_work():
+    data = json.loads(request.data)
+    print(data)
     pass
 
 
