@@ -132,6 +132,11 @@ def weekday_pick(information, weekdayfromarr):
                 else:
                     cursor.execute('SELECT * FROM webinars')
                     break
+            else:
+                cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
+                               f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
+                               f" '0:00')")
+                cursor.execute('SELECT * FROM webinars')
     else:
         cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
                        f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
