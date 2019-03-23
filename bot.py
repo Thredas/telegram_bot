@@ -33,6 +33,11 @@ weekDays = [[0, 'Понедельник'],
 app = Flask(__name__)
 
 
+@app.route('/')
+def hello_world():
+    return 'Как ты забрёл сюда? Это техническая страница для работы бота.'
+
+
 @bot.message_handler(commands=['start'])
 @bot.edited_message_handler(commands=['start'])
 def start_command(message: Message):
@@ -186,7 +191,6 @@ def time_pick(information):
                         else:
                             bot.send_message(information.message.chat.id,
                                              "Вкоре после занятия учитель отправит вам домашнее задание",)
-
 
 
 def buy(information):
