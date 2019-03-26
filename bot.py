@@ -123,7 +123,8 @@ def weekday_pick(information, weekdayfromarr):
         for data in data_arr:
             if data[0] == information.from_user.id:
                 cursor.execute(
-                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' where user_id = {information.from_user.id}")
+                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' "
+                    f"where user_id = {information.from_user.id}")
                 conn.commit()
                 break
         else:
@@ -392,7 +393,7 @@ def grade(message: Message):
 
 
 @server.route('/' + TOKEN, methods=['POST'])
-def getMessage():
+def getmessage():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
     return "!", 200
 
