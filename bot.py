@@ -2,7 +2,7 @@ import os
 import mysql.connector
 import mysql.connector
 import telebot
-from flask import Flask, request, json
+from flask import Flask, request
 from telebot.types import Message, \
      LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
@@ -30,12 +30,7 @@ weekDays = [[0, 'Понедельник'],
             [5, 'Суббота'],
             [6, 'Воскресенье']]
 
-app = Flask(__name__)
-
-
-@app.route('/')
-def hello_world():
-    return 'Как ты забрёл сюда? Это техническая страница для работы бота.'
+server = Flask(__name__)
 
 
 @bot.message_handler(commands=['start'])
@@ -396,3 +391,18 @@ def grade(message: Message):
                 break
 
 
+@server.route('/' + TOKEN, methods=['POST'])
+def getMessage():
+    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    return "!", 200
+
+
+@server.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url='https://boiling-beach-95571.herokuapp.com/' + TOKEN)
+    return "!", 200
+
+
+if __name__ == "__main__":
+    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
