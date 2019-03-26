@@ -396,4 +396,3 @@ def grade(message: Message):
                 break
 
 
-bot.polling(timeout=60)
