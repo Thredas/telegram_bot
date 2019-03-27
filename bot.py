@@ -338,6 +338,7 @@ def continue_study(information):
 
                     bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
                                           information.message.message_id, reply_markup=keyboard)
+                    break
 
                 elif data[2] < 13:
                     webinars_sum = []
