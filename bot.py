@@ -81,8 +81,8 @@ def new_user(message):
     if str(message.chat.id) == '523756571':
         keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
         keyboard.add(keyboard_button)
-    bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.')
-    bot.send_message(message.chat.id, 'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+    bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                                      'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
     pass
 
 
