@@ -208,10 +208,11 @@ def time_pick(information):
 
                     if len(data_arr) > 0:
                         for data in data_arr:
-                            if data[2] == 0:
-                                bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
-                                                 reply_markup=keyboard)
-                                break
+                            if data[0] == information.from_user.id:
+                                if data[2] == 0:
+                                    bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
+                                                     reply_markup=keyboard)
+                                    break
                         else:
                             for data in data_arr:
                                 if data[0] == information.from_user.id:
