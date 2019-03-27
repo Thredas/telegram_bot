@@ -364,9 +364,6 @@ def continue_study(information):
                                           information.message.message_id, reply_markup=keyboard)
                     break
 
-                else:
-                    buy(information)
-                    break
         else:
             buy(information)
 
