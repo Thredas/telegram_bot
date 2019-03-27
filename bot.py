@@ -339,6 +339,30 @@ def continue_study(information):
                     bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
                                           information.message.message_id, reply_markup=keyboard)
                     break
+
+                elif data[2] == 0:
+                    webinars_sum = []
+                    i = 0
+
+                    cursor.execute('SELECT * FROM webinars')
+
+                    row = cursor.fetchall()
+                    webinars_sum.append(row[0][0])
+
+                    while i < len(row) - 1:
+                        if row[i][0] == row[i + 1][0]:
+                            i += 1
+                        else:
+                            i += 1
+                            webinars_sum.append(row[i][0])
+
+                    keyboard = InlineKeyboardMarkup()
+
+                    for i in webinars_sum:
+                        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+
+                    bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
+                                          information.message.message_id, reply_markup=keyboard)
                 else:
                     buy(information)
                     break
