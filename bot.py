@@ -248,7 +248,7 @@ def buy(information):
         for data in data_arr:
             if data[0] == information.from_user.id:
 
-                if data[2] >= 13 | data[2] == 0:
+                if data[2] >= 13 or data[2] == 0:
                     bot.delete_message(information.message.chat.id, information.message.message_id)
                     bot.send_invoice(
                         information.message.chat.id,
