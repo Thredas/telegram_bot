@@ -248,7 +248,7 @@ def buy(information):
         for data in data_arr:
             if data[0] == information.from_user.id:
 
-                if data[2] == 13 | data[2] == 0:
+                if data[2] >= 13 | data[2] == 0:
                     bot.delete_message(information.message.chat.id, information.message.message_id)
                     bot.send_invoice(
                         information.message.chat.id,
@@ -256,7 +256,8 @@ def buy(information):
                         description='Чтобы продолжить обучение, заплатите за следующие 12 вебинаров',
                         provider_token=PAYMENTS_PROVIDER_TOKEN,
                         currency='RUB',
-                        photo_url='https://www.instituteiba.by/upload/medialibrary/5f5/5f5aa75c5497429160440528683d411c.jpg',
+                        photo_url='https://www.instituteiba.by/upload/medialibrary/5f5/'
+                                  '5f5aa75c5497429160440528683d411c.jpg',
                         photo_height=560,
                         photo_width=1024,
                         photo_size=512,
@@ -266,9 +267,12 @@ def buy(information):
                         invoice_payload='webinars_payed'
                     )
                     break
-        else:
-            bot.send_message(information.message.chat.id, 'Вы уже оплатили занятия и сможете снова за них заплатить,'
-                                                          'когда пройдёте их все до конца')
+
+                else:
+                    bot.send_message(information.message.chat.id,
+                                     'Вы уже оплатили занятия, и сможете снова за них заплатить, '
+                                     'когда пройдёте их все до конца.')
+                    break
 
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
