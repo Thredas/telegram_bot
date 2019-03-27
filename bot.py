@@ -240,6 +240,7 @@ def time_pick(information):
 
 
 def buy(information):
+    bot.delete_message(information.message.chat.id, information.message.message_id)
     bot.send_invoice(
         information.message.chat.id,
         title='Продолжение курса',
