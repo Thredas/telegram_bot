@@ -7,7 +7,7 @@ from telebot.types import Message, \
      LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 PRICE = LabeledPrice(label='Продолжить курс', amount=9900)
-PAYMENTS_PROVIDER_TOKEN = '381764678:TEST:9009'
+PAYMENTS_PROVIDER_TOKEN = '401643678:TEST:4e21aaf8-dde1-4022-b9ed-238701432e02'
 
 TOKEN = '843095561:AAGHQNHS4aN0Pvs76DeGZ8Es8yfKL9113bE'
 
@@ -30,6 +30,7 @@ weekDays = [[0, 'Понедельник'],
             [5, 'Суббота'],
             [6, 'Воскресенье']]
 
+
 server = Flask(__name__)
 
 
@@ -37,24 +38,36 @@ server = Flask(__name__)
 @bot.edited_message_handler(commands=['start'])
 def start_command(message: Message):
 
-    cursor.execute('SELECT * FROM Users')
+    cursor.execute('SELECT * FROM teachers')
     data_arr = cursor.fetchall()
 
     if len(data_arr) > 0:
         for data in data_arr:
             if data[0] == message.chat.id:
                 keyboard = InlineKeyboardMarkup()
-                keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
-                bot.send_message(message.chat.id, f"Снова здравствуйте, {message.from_user.first_name}.\n\n"
-                                 f"Вы остановились на {data[2]} занятии. \nЖелаете записаться на него?",
+                keyboard.row(InlineKeyboardButton('Создать график занятий', callback_data='timetable'))
+                keyboard.add(InlineKeyboardButton('Посмотреть записанных учеников', callback_data='pupils'))
+                bot.send_message(message.chat.id, f"Здравствуйте, {data[1]}.\n\n"f"Какую операцию вы хотите выполнить?",
                                  reply_markup=keyboard)
+
                 break
         else:
-            new_user(message)
-    else:
-        new_user(message)
+            cursor.execute('SELECT * FROM Users')
+            data_arr = cursor.fetchall()
 
-    pass
+            if len(data_arr) > 0:
+                for data in data_arr:
+                    if data[0] == message.chat.id:
+                        keyboard = InlineKeyboardMarkup()
+                        keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+                        bot.send_message(message.chat.id, f"Снова здравствуйте, {message.from_user.first_name}.\n\n"
+                        f"Вы остановились на {data[2]} занятии. \nЖелаете записаться на него?",
+                                         reply_markup=keyboard)
+                        break
+                else:
+                    new_user(message)
+            else:
+                new_user(message)
 
 
 def new_user(message):
@@ -98,6 +111,13 @@ def callback_handler(callback_query: CallbackQuery):
     if ':' in callback_query.data:
         time_pick(callback_query)
 
+    if callback_query.data == 'timetable':
+        bot.send_message(callback_query.message.chat.id, 'Введите через запятую, в какие дни вы хотели бы работать.\n\n')
+        bot.register_next_step_handler(callback_query.message, timetable)
+
+    if callback_query.data == 'pupils':
+        pupils(callback_query)
+
     if callback_query.data == 'buy':
         buy(callback_query)
 
@@ -111,6 +131,50 @@ def callback_handler(callback_query: CallbackQuery):
 
     if callback_query.data == 'continue_study':
         continue_study(callback_query)
+    pass
+
+
+days = []
+time = []
+i = 0
+
+
+def timetable(message: Message):
+
+    for weekDay in weekDays:
+        if weekDay[1] in message.text:
+            days.append(message.text.split(', '))
+            print(days)
+
+    if i != len(days[0]):
+        bot.send_message(message.chat.id,
+                         f'Введите через запятую, в какое время в {days[0][i]} вы хотели бы работать.')
+        bot.register_next_step_handler(message, time_in_timetable)
+    else:
+        k = 0
+        text = ''
+        time_text = ''
+
+        for day in days[0]:
+            for times in time[k]:
+                time_text += times + ' '
+            text += f'В {day} в: {time_text}\n'
+            k += 1
+
+        print(time)
+        bot.send_message(message.chat.id,
+                         f'Значит вы хотите работать: \n{text}')
+
+
+def time_in_timetable(message: Message):
+    global i
+    i += 1
+    time.append(message.text.split(', '))
+
+    timetable(message)
+
+
+def pupils(information):
     pass
 
 
@@ -253,7 +317,7 @@ def buy(information):
                     bot.send_invoice(
                         information.message.chat.id,
                         title='Продолжение курса',
-                        description='Чтобы продолжить обучение, заплатите за следующие 12 вебинаров',
+                        description='Чтобы продолжить обучение, заплатите за следующие 12 вебинаров.',
                         provider_token=PAYMENTS_PROVIDER_TOKEN,
                         currency='RUB',
                         photo_url='https://www.instituteiba.by/upload/medialibrary/5f5/'
@@ -434,18 +498,4 @@ def grade(message: Message):
                 break
 
 
-@server.route('/' + TOKEN, methods=['POST'])
-def getmessage():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
-
-
-@server.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url='https://boiling-beach-95571.herokuapp.com/' + TOKEN)
-    return "!", 200
-
-
-if __name__ == "__main__":
-    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+bot.polling()
