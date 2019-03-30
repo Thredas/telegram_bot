@@ -7,7 +7,7 @@ from telebot.types import Message, \
      LabeledPrice, PreCheckoutQuery, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 PRICE = LabeledPrice(label='Продолжить курс', amount=9900)
-PAYMENTS_PROVIDER_TOKEN = '401643678:TEST:4e21aaf8-dde1-4022-b9ed-238701432e02'
+PAYMENTS_PROVIDER_TOKEN = '381764678:TEST:9009'
 
 TOKEN = '843095561:AAGHQNHS4aN0Pvs76DeGZ8Es8yfKL9113bE'
 
@@ -22,14 +22,17 @@ conn = mysql.connector.connect(
 print('MySQL connected')
 cursor = conn.cursor()
 
-weekDays = [[0, 'Понедельник'],
-            [1, 'Вторник'],
-            [2, 'Среда'],
-            [3, 'Четверг'],
-            [4, 'Пятница'],
-            [5, 'Суббота'],
-            [6, 'Воскресенье']]
+weekDays = [[0, 'понедельник'],
+            [1, 'вторник'],
+            [2, 'среда'],
+            [3, 'четверг'],
+            [4, 'пятница'],
+            [5, 'суббота'],
+            [6, 'воскресенье']]
 
+days = []
+timez = []
+z = 0
 
 server = Flask(__name__)
 
@@ -47,7 +50,7 @@ def start_command(message: Message):
                 keyboard = InlineKeyboardMarkup()
                 keyboard.row(InlineKeyboardButton('Создать график занятий', callback_data='timetable'))
                 keyboard.add(InlineKeyboardButton('Посмотреть записанных учеников', callback_data='pupils'))
-                bot.send_message(message.chat.id, f"Здравствуйте, {data[1]}.\n\n"f"Какую операцию вы хотите выполнить?",
+                bot.send_message(message.chat.id, f"Здравствуйте, {data[1]}.\n\nКакую операцию вы хотите выполнить?",
                                  reply_markup=keyboard)
 
                 break
@@ -61,13 +64,23 @@ def start_command(message: Message):
                         keyboard = InlineKeyboardMarkup()
                         keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
                         bot.send_message(message.chat.id, f"Снова здравствуйте, {message.from_user.first_name}.\n\n"
-                        f"Вы остановились на {data[2]} занятии. \nЖелаете записаться на него?",
+                                         f"Вы остановились на {data[2]} занятии. \nЖелаете записаться на него?",
                                          reply_markup=keyboard)
                         break
                 else:
                     new_user(message)
             else:
                 new_user(message)
+
+
+def teacher_pick():
+    cursor.execute('SELECT * FROM teachers')
+    row = cursor.fetchall()
+
+    keyboard = InlineKeyboardMarkup()
+
+    for data in row:
+        keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
 
 
 def new_user(message):
@@ -89,7 +102,7 @@ def new_user(message):
     keyboard = InlineKeyboardMarkup()
 
     for i in webinars_sum:
-        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
     if str(message.chat.id) == '523756571':
         keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
@@ -104,7 +117,7 @@ def callback_handler(callback_query: CallbackQuery):
     bot.answer_callback_query(callback_query.id)
 
     for weekDay in weekDays:
-        if callback_query.data == weekDay[1]:
+        if weekDay[1] in callback_query.data:
             weekday_pick(callback_query, weekDay)
             break
 
@@ -112,7 +125,8 @@ def callback_handler(callback_query: CallbackQuery):
         time_pick(callback_query)
 
     if callback_query.data == 'timetable':
-        bot.send_message(callback_query.message.chat.id, 'Введите через запятую, в какие дни вы хотели бы работать.\n\n')
+        bot.send_message(callback_query.message.chat.id, 'Введите через запятую, в какие дни вы хотели бы работать.'
+                                                         '\n\n')
         bot.register_next_step_handler(callback_query.message, timetable)
 
     if callback_query.data == 'pupils':
@@ -129,49 +143,72 @@ def callback_handler(callback_query: CallbackQuery):
     if callback_query.data == '1':
         os.remove('bot.py')
 
+    if callback_query.data == 'create_timetable':
+        create_timetable(callback_query)
+
     if callback_query.data == 'continue_study':
         continue_study(callback_query)
     pass
-
-
-days = []
-time = []
-i = 0
 
 
 def timetable(message: Message):
 
     for weekDay in weekDays:
         if weekDay[1] in message.text:
-            days.append(message.text.split(', '))
-            print(days)
+            days.append(message.text.lower().split(', '))
 
-    if i != len(days[0]):
+    if z != len(days[0]):
         bot.send_message(message.chat.id,
-                         f'Введите через запятую, в какое время в {days[0][i]} вы хотели бы работать.')
+                         f'Введите через запятую, в какое время в {days[0][z]} вы хотели бы работать.')
         bot.register_next_step_handler(message, time_in_timetable)
     else:
         k = 0
         text = ''
-        time_text = ''
 
         for day in days[0]:
-            for times in time[k]:
-                time_text += times + ' '
+            time_text = ''
+            for times in timez[k]:
+                time_text += times + ', '
+
             text += f'В {day} в: {time_text}\n'
             k += 1
 
-        print(time)
+        keyboard = InlineKeyboardMarkup()
+        keyboard.add(InlineKeyboardButton('Да', callback_data='create_timetable'))
+
         bot.send_message(message.chat.id,
-                         f'Значит вы хотите работать: \n{text}')
+                         f'Значит, вы хотите работать: \n{text}', reply_markup=keyboard)
 
 
 def time_in_timetable(message: Message):
-    global i
-    i += 1
-    time.append(message.text.split(', '))
+    global z
+    z += 1
+    timez.append(message.text.split(', '))
 
     timetable(message)
+
+
+def create_timetable(information):
+    k = 0
+    for day in days[0]:
+        for weekDay in weekDays:
+            if day == weekDay[1]:
+                day = weekDay[0]
+
+        for time in timez[k]:
+            cursor.execute('SELECT * FROM teachers')
+            data_arr = cursor.fetchall()
+
+            for data in data_arr:
+                if data[0] == information.from_user.id:
+                    cursor.execute(f"insert into paid_webinars values ({day}, "
+                                   f"'{time}', '{data[2]}', {data[0]},"
+                                   f" '{data[1]}')")
+                    conn.commit()
+                    print(cursor)
+        k += 1
+    bot.edit_message_text("График занятий создан", information.message.chat.id,
+                          information.message.message_id)
 
 
 def pupils(information):
@@ -183,23 +220,32 @@ def weekday_pick(information, weekdayfromarr):
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
+    callback = information.data.split('/')
+    print(callback)
+
     if len(data_arr) > 0:
         for data in data_arr:
             if data[0] == information.from_user.id:
-                cursor.execute(
-                    f"update Users set lesson_weekday = '{weekdayfromarr[1]}' "
-                    f"where user_id = {information.from_user.id}")
+                if data[2] == 0:
+                    cursor.execute(
+                        f"update Users set lesson_weekday = '{weekdayfromarr[1]}', "
+                        f"teacher_id = {callback[1]} "
+                        f"where user_id = {information.from_user.id}")
+                else:
+                    cursor.execute(
+                        f"update Users set lesson_weekday = '{weekdayfromarr[1]}' "
+                        f"where user_id = {information.from_user.id}")
                 conn.commit()
                 break
         else:
             cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                           f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                           f" '0:00')")
+                           f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
+                           f" '0:00', '{callback[1]}')")
             conn.commit()
     else:
         cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
-                       f"'{str(information.from_user.first_name)}', 0, '{information.data}',"
-                       f" '0:00')")
+                       f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
+                       f" '0:00', '{callback[1]}')")
         conn.commit()
 
     cursor.execute('SELECT * FROM Users')
@@ -223,7 +269,7 @@ def weekday_pick(information, weekdayfromarr):
 
     for data in row:
         if data[0] == weekdayfromarr[0]:
-            keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
+            keyboard.add(InlineKeyboardButton(data[1], callback_data=data[1]))
 
     conn.commit()
 
@@ -249,58 +295,65 @@ def time_pick(information):
     row = cursor.fetchall()
 
     time_arr = []
-    for i in row:
-        time_arr.append(i[2])
+    for k in row:
+        for data in data_arr:
+            if k[3] == data[5]:
+                time_arr.append(k[1])
 
     for time in time_arr:
         if information.data == time:
             for i in row:
-                if time == i[2]:
-                    cursor.execute(
-                        f"update Users set lesson_time = '{time}' where user_id = {information.from_user.id}")
-                    conn.commit()
-
-                    keyboard = InlineKeyboardMarkup()
-                    keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
-
-                    bot.edit_message_text("Отлично, вот ваша ссылка на вебинар: \n" + str(i[1]),
-                                          information.message.chat.id,
-                                          information.message.message_id)
-
-                    cursor.execute('SELECT * FROM Users')
-                    data_arr = cursor.fetchall()
-
-                    if len(data_arr) > 0:
-                        for data in data_arr:
-                            if data[0] == information.from_user.id:
-                                if data[2] == 0:
-                                    bot.send_message(information.message.chat.id, "Желаете оплатить следующие уроки?",
-                                                     reply_markup=keyboard)
-                                    break
-                        else:
-                            for data in data_arr:
-                                if data[0] == information.from_user.id:
-                                    cursor.execute('SELECT * FROM home_work')
-                                    data_arr2 = cursor.fetchall()
-
-                                    for data2 in data_arr2:
-                                        if data2[0] == information.from_user.id:
-                                            cursor.execute(
-                                                f"update home_work set lesson = '{data[2]}' "
-                                                f"where user_id = {information.from_user.id}")
-                                            break
-                                    else:
-                                        cursor.execute(
-                                            f"insert into home_work values ({int(information.from_user.id)}, "
-                                            f"'{str(information.from_user.first_name)}',"
-                                            f" {data[2]}, "
-                                            f"'Ожидается ссылка',"
-                                            f" 'Ожидается оценка')")
-                                    break
-
-                            bot.send_message(information.message.chat.id,
-                                             "Чтобы получить домашнее задание, введите /home_work",)
+                for data in data_arr:
+                    if i[3] == data[5]:
+                        if time == i[1]:
+                            cursor.execute(
+                                f"update Users set lesson_time = '{time}' where user_id = {information.from_user.id}")
                             conn.commit()
+                            print(i)
+                            bot.edit_message_text(f"Отлично, ваш урок будет проводить {i[4]}.\n"
+                                                  f"Вот контакт вашего учителя: {i[2]}\n"
+                                                  "Cвяжитесь с ним в Skype в выбранное время.",
+                                                  information.message.chat.id,
+                                                  information.message.message_id)
+
+                            cursor.execute('SELECT * FROM Users')
+                            data_arr = cursor.fetchall()
+
+                            if len(data_arr) > 0:
+                                for data in data_arr:
+                                    if data[0] == information.from_user.id:
+                                        if data[2] == 0:
+                                            keyboard = InlineKeyboardMarkup()
+                                            keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
+                                            bot.send_message(information.message.chat.id,
+                                                             "Желаете оплатить следующие уроки?",
+                                                             reply_markup=keyboard)
+                                            break
+                                else:
+                                    for data in data_arr:
+                                        if data[0] == information.from_user.id:
+                                            cursor.execute('SELECT * FROM home_work')
+                                            data_arr2 = cursor.fetchall()
+
+                                            for data2 in data_arr2:
+                                                if data2[0] == information.from_user.id:
+                                                    cursor.execute(
+                                                        f"update home_work set lesson = '{data[2]}' "
+                                                        f"where user_id = {information.from_user.id}")
+                                                    break
+                                            else:
+                                                cursor.execute(
+                                                    f"insert into home_work values ({int(information.from_user.id)}, "
+                                                    f"'{str(information.from_user.first_name)}',"
+                                                    f" {data[2]}, "
+                                                    f"'Ожидается ссылка',"
+                                                    f" 'Ожидается оценка')")
+                                            break
+
+                                    bot.send_message(information.message.chat.id,
+                                                     "Чтобы получить домашнее задание, введите /home_work", )
+                                    conn.commit()
+
 
 
 def buy(information):
@@ -365,15 +418,6 @@ def process_successful_payment(message: Message):
                         f"update Users set lesson_Now = {data[2] + 1} where User_ID = {message.from_user.id}")
                     break
 
-        else:
-            cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
-                           f"'{str(message.from_user.first_name)}', 1, '',"
-                           f" '0:00')")
-    else:
-        cursor.execute(f"insert into Users values ({int(message.from_user.id)}, "
-                       f"'{str(message.from_user.first_name)}', 1, '',"
-                       f" '0:00')")
-
     conn.commit()
 
     keyboard = InlineKeyboardMarkup()
@@ -416,32 +460,40 @@ def continue_study(information):
                     keyboard = InlineKeyboardMarkup()
 
                     for i in webinars_sum:
-                        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+                        keyboard.add(
+                            InlineKeyboardButton(weekDays[i][1], callback_data=f'{weekDays[i][1]}'))
 
-                    bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
+                    if str(information.message.chat.id) == '523756571':
+                        keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
+                        keyboard.add(keyboard_button)
+                    bot.edit_message_text('На какой день недели вы хотели бы записаться?', information.message.chat.id,
                                           information.message.message_id, reply_markup=keyboard)
                     break
 
                 elif data[2] < 13:
                     webinars_sum = []
-                    i = 0
+                    i = -1
 
                     cursor.execute('SELECT * FROM paid_webinars')
 
                     row = cursor.fetchall()
-                    webinars_sum.append(row[0][0])
 
                     while i < len(row) - 1:
                         if row[i][0] == row[i + 1][0]:
                             i += 1
                         else:
                             i += 1
-                            webinars_sum.append(row[i][0])
+                            for data3 in data_arr:
+                                if row[i][3] == data3[5]:
+                                    webinars_sum.append(row[i][0])
+                                    break
 
                     keyboard = InlineKeyboardMarkup()
 
                     for i in webinars_sum:
-                        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=weekDays[i][1]))
+                        print(row[i][3])
+                        keyboard.add(InlineKeyboardButton(weekDays[i][1],
+                                                          callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
                     bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
                                           information.message.message_id, reply_markup=keyboard)
