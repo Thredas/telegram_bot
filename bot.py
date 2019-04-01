@@ -73,14 +73,56 @@ def start_command(message: Message):
                 new_user(message)
 
 
-def teacher_pick():
+def teacher_pick(information):
+
     cursor.execute('SELECT * FROM teachers')
     row = cursor.fetchall()
 
-    keyboard = InlineKeyboardMarkup()
+    if information.data == 'teacher_pick_new':
+        keyboard = InlineKeyboardMarkup()
 
-    for data in row:
-        keyboard.add(InlineKeyboardButton(data[2], callback_data=data[2]))
+        for data in row:
+            keyboard.add(InlineKeyboardButton(data[1], callback_data=data[0]))
+            print(data[1], data[0])
+        bot.edit_message_text('С каким учителем вы желаете продолжить обучение?', information.message.chat.id,
+                              information.message.message_id, reply_markup=keyboard)
+    else:
+        bot.edit_message_text('Хорошо, за вами будет закреплен ваш текущий учитель.', information.message.chat.id,
+                              information.message.message_id)
+        keyboard2 = InlineKeyboardMarkup()
+        keyboard2.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+        bot.send_message(information.message.chat.id, f"Желаете записаться на следующее занятие?",
+                         reply_markup=keyboard2)
+
+
+def teacher_pick2(information):
+
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    for data in data_arr:
+        if data[0] == information.from_user.id:
+            cursor.execute(
+                f"update Users set teacher_id = {information.data} "
+                f"where user_id = {information.from_user.id}")
+            break
+    conn.commit()
+
+    name = ''
+    cursor.execute('SELECT * FROM teachers')
+    row = cursor.fetchall()
+    for teacher in row:
+        if information.data == str(teacher[0]):
+            name = teacher[1]
+            break
+
+    bot.edit_message_text(f'Отлично, вы продолжите обучение с учителем по имени {name}.', information.message.chat.id,
+                          information.message.message_id)
+
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+    bot.send_message(information.message.chat.id, f"Желаете записаться на следующее занятие?",
+                     reply_markup=keyboard)
 
 
 def new_user(message):
@@ -148,7 +190,16 @@ def callback_handler(callback_query: CallbackQuery):
 
     if callback_query.data == 'continue_study':
         continue_study(callback_query)
-    pass
+
+    if callback_query.data == 'teacher_pick_new' or callback_query.data == 'teacher_pick_old':
+        teacher_pick(callback_query)
+
+    cursor.execute('SELECT * FROM teachers')
+    row = cursor.fetchall()
+    for teacher in row:
+        if callback_query.data == str(teacher[0]):
+            teacher_pick2(callback_query)
+            break
 
 
 def timetable(message: Message):
@@ -212,6 +263,17 @@ def create_timetable(information):
 
 
 def pupils(information):
+
+    cursor.execute('SELECT * FROM Users')
+    data_arr = cursor.fetchall()
+
+    text = 'К вам записаны: \n\n'
+
+    for data in data_arr:
+        if data[5] == information.from_user.id:
+            text += f'{data[1]} в {data[3]} на {data[4]}'
+
+    bot.send_message(information.message.chat.id, text)
     pass
 
 
@@ -298,23 +360,25 @@ def time_pick(information):
     for k in row:
         for data in data_arr:
             if k[3] == data[5]:
-                time_arr.append(k[1])
+                time_arr.append(str(k[0]) + '/' + str(k[1]))
 
     for time in time_arr:
-        if information.data == time:
+        time = time.split('/')
+        if information.data == time[1]:
             for i in row:
                 for data in data_arr:
                     if i[3] == data[5]:
-                        if time == i[1]:
+                        if time[1] == i[1] and time[0] == str(i[0]):
                             cursor.execute(
-                                f"update Users set lesson_time = '{time}' where user_id = {information.from_user.id}")
+                                f"update Users set lesson_time = '{time[1]}' where user_id = {information.from_user.id}")
                             conn.commit()
-                            print(i)
+
                             bot.edit_message_text(f"Отлично, ваш урок будет проводить {i[4]}.\n"
                                                   f"Вот контакт вашего учителя: {i[2]}\n"
-                                                  "Cвяжитесь с ним в Skype в выбранное время.",
+                                                  f"Cвяжитесь с ним в Skype в выбранное время.",
                                                   information.message.chat.id,
                                                   information.message.message_id)
+                            print('message_edited')
 
                             cursor.execute('SELECT * FROM Users')
                             data_arr = cursor.fetchall()
@@ -353,7 +417,6 @@ def time_pick(information):
                                     bot.send_message(information.message.chat.id,
                                                      "Чтобы получить домашнее задание, введите /home_work", )
                                     conn.commit()
-
 
 
 def buy(information):
@@ -421,14 +484,15 @@ def process_successful_payment(message: Message):
     conn.commit()
 
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton('Да', callback_data='continue_study'))
+    keyboard.add(InlineKeyboardButton('Выбрать нового', callback_data='teacher_pick_new'))
+    keyboard.add(InlineKeyboardButton('Оставить текущего', callback_data='teacher_pick_old'))
 
     bot.send_message(message.chat.id, f'Спасибо за покупку, {message.from_user.first_name}!')
     bot.send_message(message.chat.id, "Вы оплатили 12 следующих уроков. "
                                       'После каждого занятия учитель будет отправлять вам домашнее задание. '
                                       'Когда вы его выполните, учитель поставит вам оценку, и обучение продолжиться до '
                                       'тех пор, пока вы не побываете на 12 занятиях.')
-    bot.send_message(message.chat.id, "Желаете записаться на следующее занятие?",
+    bot.send_message(message.chat.id, "Вы хотите продолжить обучение с текущим учителем или выбрать нового?",
                      reply_markup=keyboard)
 
 
