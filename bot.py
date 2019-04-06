@@ -1,6 +1,5 @@
 import os
 import mysql.connector
-import mysql.connector
 import telebot
 from flask import Flask, request
 from telebot.types import Message, \
@@ -222,12 +221,16 @@ def chat2(message: Message):
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
+    global chat_isOver
+
     for data in data_arr:
         if data[0] == message.from_user.id:
             if chat_isOver == 0:
                 if message.text.lower() == 'конец':
                     global chat_counter
-                    chat_counter = 1
+                    chat_counter = 0
+
+                    chat_isOver = 1
                     bot.send_message(message.from_user.id, 'Чат окончен')
 
                 elif '/' in message.text.lower():
@@ -258,27 +261,27 @@ def chat2(message: Message):
 
 def new_user(message):
     webinars_sum = []
-    i = 0
+    k = 0
 
     cursor.execute('SELECT * FROM paid_webinars')
 
     row = cursor.fetchall()
-    webinars_sum.append(row[0][0])
 
-    while i < len(row) - 1:
-        if row[i][0] == row[i + 1][0]:
-            i += 1
+    for i in row:
+        if len(webinars_sum) != 0:
+            if i[0] == webinars_sum[k]:
+                continue
+            if i[5] == 1:
+                continue
+            webinars_sum.append(i[0])
+            k += 1
         else:
-            if row[i][5] == 0:
-                i += 1
-                webinars_sum.append(row[i][0])
-            else:
-                i += 1
+            webinars_sum.append(i[0])
 
     keyboard = InlineKeyboardMarkup()
 
     for i in webinars_sum:
-        keyboard.add(InlineKeyboardButton(weekDays[i][1], callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
+        keyboard.add(InlineKeyboardButton(weekDays[i][1].capitalize(), callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
     if str(message.chat.id) == '523756571':
         keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
@@ -299,6 +302,8 @@ def weekday_pick(information, weekdayfromarr):
         for data in data_arr:
             if data[0] == information.from_user.id:
                 if data[2] == 0:
+                    print(weekdayfromarr[1])
+                    print(callback)
                     cursor.execute(
                         f"update Users set lesson_weekday = '{weekdayfromarr[1]}', "
                         f"teacher_id = {callback[1]} "
@@ -320,24 +325,10 @@ def weekday_pick(information, weekdayfromarr):
                        f" '0:00', '{callback[1]}')")
         conn.commit()
 
-    cursor.execute('SELECT * FROM Users')
-    data_arr = cursor.fetchall()
-
-    if len(data_arr) > 0:
-        for data in data_arr:
-            if data[0] == information.from_user.id:
-                if data[2] > 0:
-                    cursor.execute('SELECT * FROM paid_webinars')
-                    break
-                else:
-                    cursor.execute('SELECT * FROM webinars')
-                    break
-    else:
-        cursor.execute('SELECT * FROM webinars')
+    cursor.execute('SELECT * FROM paid_webinars')
+    row = cursor.fetchall()
 
     keyboard = InlineKeyboardMarkup()
-
-    row = cursor.fetchall()
 
     for data in row:
         if data[0] == weekdayfromarr[0]:
@@ -355,92 +346,143 @@ def time_pick(information):
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
-    if len(data_arr) > 0:
-        for data in data_arr:
-            if data[0] == information.from_user.id:
-                if data[2] > 0:
-                    cursor.execute('SELECT * FROM paid_webinars')
-                    break
-                else:
-                    cursor.execute('SELECT * FROM webinars')
-                    break
-
+    cursor.execute('SELECT * FROM paid_webinars')
     row = cursor.fetchall()
 
-    time_arr = []
-    for k in row:
+    information.data = information.data.split('/')
+    print(information.data)
+
+    for i in row:
         for data in data_arr:
-            if k[3] == data[5]:
-                if k[5] == 0:
-                    time_arr.append(str(k[0]) + '/' + str(k[1]))
+            if data[2] == 0:
+                if information.data[0] == str(i[0]) and information.data[1] == i[1]:
+                    cursor.execute(
+                        f"update Users set lesson_time = '{information.data[1]}' "
+                        f"where user_id = {information.from_user.id}")
 
-    for time in time_arr:
-        time2 = time.split('/')
-        if information.data == time:
-            for i in row:
-                for data in data_arr:
-                    if i[3] == data[5]:
-                        if time2[1] == i[1] and time2[0] == str(i[0]):
-                            cursor.execute(
-                                f"update Users set lesson_time = '{time2[1]}' "
-                                f"where user_id = {information.from_user.id}")
+                    cursor.execute(
+                        f"update paid_webinars set isTaken = 1 "
+                        f"where teacher_id = {i[3]} and time = '{information.data[1]}' "
+                        f"and weekDay = {information.data[0]}")
+                    conn.commit()
 
-                            cursor.execute(
-                                f"update paid_webinars set isTaken = 1 "
-                                f"where teacher_id = {i[3]} and time = '{time2[1]}' and weekDay = {time2[0]}")
+                    bot.edit_message_text(f"Отлично, ваш урок будет проводить {i[4]}.\n"
+                                          f"Вот контакт вашего учителя: {i[2]}\n"
+                                          f"Cвяжитесь с ним в Skype в выбранное время.",
+                                          information.message.chat.id,
+                                          information.message.message_id)
+                    print('message modified')
+
+                    for weekDay in weekDays:
+                        if information.data[0] == str(weekDay[0]):
+                            information.data[0] = weekDay[1]
+
+                    bot.send_message(i[3], f'На занятия записался {information.from_user.first_name}\n'
+                                           f'День недели: {information.data[0]}, время: {information.data[1]}')
+
+                    cursor.execute('SELECT * FROM Users')
+                    data_arr = cursor.fetchall()
+
+                    if len(data_arr) > 0:
+                        for data in data_arr:
+                            if data[0] == information.from_user.id:
+                                if data[2] == 0:
+                                    keyboard = InlineKeyboardMarkup()
+                                    keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
+                                    bot.send_message(information.message.chat.id,
+                                                     "Желаете оплатить следующие уроки?",
+                                                     reply_markup=keyboard)
+                                    break
+                        else:
+                            for data in data_arr:
+                                if data[0] == information.from_user.id:
+                                    cursor.execute('SELECT * FROM home_work')
+                                    data_arr2 = cursor.fetchall()
+
+                                    for data2 in data_arr2:
+                                        if data2[0] == information.from_user.id:
+                                            cursor.execute(
+                                                f"update home_work set lesson = '{data[2]}' "
+                                                f"where user_id = {information.from_user.id}")
+                                            break
+                                    else:
+                                        cursor.execute(
+                                            f"insert into home_work values ({int(information.from_user.id)}, "
+                                            f"'{str(information.from_user.first_name)}',"
+                                            f" {data[2]}, "
+                                            f"'Ожидается ссылка',"
+                                            f" 'Ожидается оценка')")
+                                    break
+
+                            bot.send_message(information.message.chat.id,
+                                             "Чтобы получить домашнее задание, введите /home_work", )
                             conn.commit()
+                            break
+            else:
+                if i[3] == data[5]:
+                    if information.data[0] == str(i[0]) and information.data[1] == i[1]:
+                        cursor.execute(
+                            f"update Users set lesson_time = '{information.data[1]}' "
+                            f"where user_id = {information.from_user.id}")
 
-                            bot.edit_message_text(f"Отлично, ваш урок будет проводить {i[4]}.\n"
-                                                  f"Вот контакт вашего учителя: {i[2]}\n"
-                                                  f"Cвяжитесь с ним в Skype в выбранное время.",
-                                                  information.message.chat.id,
-                                                  information.message.message_id)
-                            print('message modified')
+                        cursor.execute(
+                            f"update paid_webinars set isTaken = 1 "
+                            f"where teacher_id = {i[3]} and time = '{information.data[1]}' "
+                            f"and weekDay = {information.data[0]}")
+                        conn.commit()
 
-                            for weekDay in weekDays:
-                                if time2[0] == str(weekDay[0]):
-                                    time2[0] = weekDay[1]
+                        bot.edit_message_text(f"Отлично, ваш урок будет проводить {i[4]}.\n"
+                                              f"Вот контакт вашего учителя: {i[2]}\n"
+                                              f"Cвяжитесь с ним в Skype в выбранное время.",
+                                              information.message.chat.id,
+                                              information.message.message_id)
+                        print('message modified')
 
-                            bot.send_message(i[3], f'На занятия записался {information.from_user.first_name}\n'
-                                                   f'День недели: {time2[0]}, время: {time2[1]}')
+                        for weekDay in weekDays:
+                            if information.data[0] == str(weekDay[0]):
+                                information.data[0] = weekDay[1]
 
-                            cursor.execute('SELECT * FROM Users')
-                            data_arr = cursor.fetchall()
+                        bot.send_message(i[3], f'На занятия записался {information.from_user.first_name}\n'
+                        f'День недели: {information.data[0]}, время: {information.data[1]}')
 
-                            if len(data_arr) > 0:
+                        cursor.execute('SELECT * FROM Users')
+                        data_arr = cursor.fetchall()
+
+                        if len(data_arr) > 0:
+                            for data in data_arr:
+                                if data[0] == information.from_user.id:
+                                    if data[2] == 0:
+                                        keyboard = InlineKeyboardMarkup()
+                                        keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
+                                        bot.send_message(information.message.chat.id,
+                                                         "Желаете оплатить следующие уроки?",
+                                                         reply_markup=keyboard)
+                                        break
+                            else:
                                 for data in data_arr:
                                     if data[0] == information.from_user.id:
-                                        if data[2] == 0:
-                                            keyboard = InlineKeyboardMarkup()
-                                            keyboard.add(InlineKeyboardButton("Да", callback_data='buy'))
-                                            bot.send_message(information.message.chat.id,
-                                                             "Желаете оплатить следующие уроки?",
-                                                             reply_markup=keyboard)
-                                            break
-                                else:
-                                    for data in data_arr:
-                                        if data[0] == information.from_user.id:
-                                            cursor.execute('SELECT * FROM home_work')
-                                            data_arr2 = cursor.fetchall()
+                                        cursor.execute('SELECT * FROM home_work')
+                                        data_arr2 = cursor.fetchall()
 
-                                            for data2 in data_arr2:
-                                                if data2[0] == information.from_user.id:
-                                                    cursor.execute(
-                                                        f"update home_work set lesson = '{data[2]}' "
-                                                        f"where user_id = {information.from_user.id}")
-                                                    break
-                                            else:
+                                        for data2 in data_arr2:
+                                            if data2[0] == information.from_user.id:
                                                 cursor.execute(
-                                                    f"insert into home_work values ({int(information.from_user.id)}, "
-                                                    f"'{str(information.from_user.first_name)}',"
-                                                    f" {data[2]}, "
-                                                    f"'Ожидается ссылка',"
-                                                    f" 'Ожидается оценка')")
-                                            break
+                                                    f"update home_work set lesson = '{data[2]}' "
+                                                    f"where user_id = {information.from_user.id}")
+                                                break
+                                        else:
+                                            cursor.execute(
+                                                f"insert into home_work values ({int(information.from_user.id)}, "
+                                                f"'{str(information.from_user.first_name)}',"
+                                                f" {data[2]}, "
+                                                f"'Ожидается ссылка',"
+                                                f" 'Ожидается оценка')")
+                                        break
 
-                                    bot.send_message(information.message.chat.id,
-                                                     "Чтобы получить домашнее задание, введите /home_work", )
-                                    conn.commit()
+                                bot.send_message(information.message.chat.id,
+                                                 "Чтобы получить домашнее задание, введите /home_work", )
+                                conn.commit()
+                                break
 
 
 def buy(information):
@@ -493,9 +535,7 @@ def process_successful_payment(message: Message):
 
         if len(data_arr) > 0:
             for data in data_arr:
-
                 if data[0] == message.from_user.id:
-
                     if data[2] >= 13:
                         cursor.execute(
                             f"update Users set lesson_Now = 1 where User_ID = {message.from_user.id}")
@@ -552,6 +592,17 @@ def teacher_pick2(information):
             cursor.execute(
                 f"update Users set teacher_id = {information.data} "
                 f"where user_id = {information.from_user.id}")
+
+            day = 0
+
+            for weekDay in weekDays:
+                if data[3] == weekDay[1]:
+                    day = weekDay[0]
+
+            cursor.execute(
+                f"update paid_webinars set isTaken = 0 "
+                f"where teacher_id = {data[5]} and time = '{data[4]}' and weekDay = {day}")
+            conn.commit()
             break
     conn.commit()
 
@@ -580,31 +631,30 @@ def continue_study(information):
     if len(data_arr) > 0:
         for data in data_arr:
             if data[0] == information.message.chat.id:
-
                 if data[2] == 0:
                     webinars_sum = []
-                    i = 0
+                    k = 0
 
-                    cursor.execute('SELECT * FROM webinars')
-
+                    cursor.execute('SELECT * FROM paid_webinars')
                     row = cursor.fetchall()
-                    webinars_sum.append(row[0][0])
 
-                    while i < len(row) - 1:
-                        if row[i][0] == row[i + 1][0]:
-                            i += 1
+                    for i in row:
+                        if len(webinars_sum) != 0:
+                            if i[0] == webinars_sum[k]:
+                                continue
+                            if i[5] == 1:
+                                continue
+                            webinars_sum.append(i[0])
+                            k += 1
                         else:
-                            if row[i][5] == 0:
-                                i += 1
-                                webinars_sum.append(row[i][0])
-                            else:
-                                i += 1
+                            webinars_sum.append(i[0])
 
                     keyboard = InlineKeyboardMarkup()
 
                     for i in webinars_sum:
                         keyboard.add(
-                            InlineKeyboardButton(weekDays[i][1], callback_data=f'{weekDays[i][1]}'))
+                            InlineKeyboardButton(weekDays[i][1].capitalize(),
+                                                 callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
                     if str(information.message.chat.id) == '523756571':
                         keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
@@ -615,25 +665,24 @@ def continue_study(information):
 
                 elif data[2] < 13:
                     webinars_sum = []
-                    i = -1
+                    k = 0
 
                     cursor.execute('SELECT * FROM paid_webinars')
 
                     row = cursor.fetchall()
 
-                    while i < len(row) - 1:
-                        if row[i][0] == row[i + 1][0]:
-                            i += 1
+                    for i in row:
+                        if len(webinars_sum) != 0:
+                            if i[0] == webinars_sum[k]:
+                                continue
+                            if i[5] == 1:
+                                continue
+                            if i[3] != data[5]:
+                                continue
+                            webinars_sum.append(i[0])
+                            k += 1
                         else:
-                            i += 1
-                            for data3 in data_arr:
-                                if row[i][3] == data3[5]:
-                                    if row[i][5] == 0:
-                                        i += 1
-                                        webinars_sum.append(row[i][0])
-                                    else:
-                                        i += 1
-                                    break
+                            webinars_sum.append(i[0])
 
                     keyboard = InlineKeyboardMarkup()
 
@@ -647,8 +696,6 @@ def continue_study(information):
 
         else:
             buy(information)
-
-    pass
 
 
 @bot.message_handler(commands=['home_work'])
