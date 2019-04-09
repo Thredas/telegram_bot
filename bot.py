@@ -120,14 +120,6 @@ def callback_handler(callback_query: CallbackQuery):
     if callback_query.data == 'buy':
         buy(callback_query)
 
-    if callback_query.data == 'test_keyboard':
-        keyboard = InlineKeyboardMarkup()
-        keyboard.add(InlineKeyboardButton('Да', callback_data='1'))
-        bot.edit_message_text("Уверен?", callback_query.message.chat.id,
-                              callback_query.message.message_id, reply_markup=keyboard)
-    if callback_query.data == '1':
-        os.remove('bot.py')
-
     if callback_query.data == 'create_timetable':
         create_timetable(callback_query)
 
@@ -143,6 +135,9 @@ def callback_handler(callback_query: CallbackQuery):
         if callback_query.data == str(teacher[0]):
             teacher_pick2(callback_query)
             break
+
+
+# Чат
 
 
 def teacher_chat(information):
@@ -269,26 +264,30 @@ def new_user(message):
 
     for i in row:
         if len(webinars_sum) != 0:
-            if i[0] == webinars_sum[k]:
-                continue
             if i[5] == 1:
+                continue
+            if i[0] == webinars_sum[k]:
                 continue
             webinars_sum.append(i[0])
             k += 1
+            print(k)
         else:
+            if i[5] == 1:
+                continue
             webinars_sum.append(i[0])
 
-    keyboard = InlineKeyboardMarkup()
+    if len(webinars_sum) != 0:
+        keyboard = InlineKeyboardMarkup()
 
-    for i in webinars_sum:
-        keyboard.add(InlineKeyboardButton(weekDays[i][1].capitalize(), callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
+        for i in webinars_sum:
+            keyboard.add(
+                InlineKeyboardButton(weekDays[i][1].capitalize(), callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-    if str(message.chat.id) == '523756571':
-        keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
-        keyboard.add(keyboard_button)
-    bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
-                                      'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
-    pass
+        bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                                          'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+    else:
+        bot.send_message(message.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
+                                          'либо на этой неделе их не будет')
 
 
 def weekday_pick(information, weekdayfromarr):
@@ -532,15 +531,28 @@ def process_successful_payment(message: Message):
         cursor.execute('SELECT * FROM Users')
 
         data_arr = cursor.fetchall()
+        day = 0
 
         if len(data_arr) > 0:
             for data in data_arr:
                 if data[0] == message.from_user.id:
                     if data[2] >= 13:
+                        for weekDay in weekDays:
+                            if data[3] == weekDay[1]:
+                                day = weekDay[0]
+
+                        cursor.execute(
+                            f"update paid_webinars set isTaken = 0 "
+                            f"where teacher_id = {data[5]} and time = '{data[4]}' and weekDay = {day}")
+
                         cursor.execute(
                             f"update Users set lesson_Now = 1 where User_ID = {message.from_user.id}")
                         break
                     else:
+                        cursor.execute(
+                            f"update paid_webinars set isTaken = 0 "
+                            f"where teacher_id = {data[5]} and time = '{data[4]}' and weekDay = {day}")
+
                         cursor.execute(
                             f"update Users set lesson_Now = {data[2] + 1} where User_ID = {message.from_user.id}")
                         break
@@ -640,27 +652,32 @@ def continue_study(information):
 
                     for i in row:
                         if len(webinars_sum) != 0:
-                            if i[0] == webinars_sum[k]:
-                                continue
                             if i[5] == 1:
+                                continue
+                            if i[0] == webinars_sum[k]:
                                 continue
                             webinars_sum.append(i[0])
                             k += 1
+                            print(k)
                         else:
+                            if i[5] == 1:
+                                continue
                             webinars_sum.append(i[0])
 
-                    keyboard = InlineKeyboardMarkup()
+                    if len(webinars_sum) != 0:
+                        keyboard = InlineKeyboardMarkup()
 
-                    for i in webinars_sum:
-                        keyboard.add(
-                            InlineKeyboardButton(weekDays[i][1].capitalize(),
-                                                 callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
+                        for i in webinars_sum:
+                            keyboard.add(
+                                InlineKeyboardButton(weekDays[i][1].capitalize(),
+                                                     callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-                    if str(information.message.chat.id) == '523756571':
-                        keyboard_button = InlineKeyboardButton('test', callback_data='test_keyboard')
-                        keyboard.add(keyboard_button)
-                    bot.edit_message_text('На какой день недели вы хотели бы записаться?', information.message.chat.id,
-                                          information.message.message_id, reply_markup=keyboard)
+                        bot.send_message(information.chat.id,
+                                         'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                                         'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+                    else:
+                        bot.send_message(information.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
+                                                              'либо на этой неделе их не будет')
                     break
 
                 elif data[2] < 13:
@@ -673,25 +690,34 @@ def continue_study(information):
 
                     for i in row:
                         if len(webinars_sum) != 0:
-                            if i[0] == webinars_sum[k]:
-                                continue
                             if i[5] == 1:
                                 continue
                             if i[3] != data[5]:
                                 continue
+                            if i[0] == webinars_sum[k]:
+                                continue
                             webinars_sum.append(i[0])
                             k += 1
+                            print(k)
                         else:
+                            if i[5] == 1:
+                                continue
                             webinars_sum.append(i[0])
 
-                    keyboard = InlineKeyboardMarkup()
+                    if len(webinars_sum) != 0:
+                        keyboard = InlineKeyboardMarkup()
 
-                    for i in webinars_sum:
-                        keyboard.add(InlineKeyboardButton(weekDays[i][1],
-                                                          callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
+                        for i in webinars_sum:
+                            keyboard.add(
+                                InlineKeyboardButton(weekDays[i][1].capitalize(),
+                                                     callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-                    bot.edit_message_text("На какой день недели вы хотели бы записаться?", information.message.chat.id,
-                                          information.message.message_id, reply_markup=keyboard)
+                        bot.send_message(information.chat.id,
+                                         'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                                         'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+                    else:
+                        bot.send_message(information.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
+                                                              'либо на этой неделе их не будет')
                     break
 
         else:
@@ -749,8 +775,11 @@ def grade(message: Message):
 def timetable(message: Message):
 
     for weekDay in weekDays:
-        if weekDay[1] in message.text:
-            days.append(message.text.lower().split(', '))
+        if weekDay[1] in message.text.lower():
+            if ',' in message.text:
+                days.append(message.text.lower().split(', '))
+            else:
+                days.append(message.text.lower())
 
     if z != len(days[0]):
         bot.send_message(message.chat.id,
