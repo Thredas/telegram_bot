@@ -3,6 +3,7 @@ from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.utils import get_random_id
 
 import mysql.connector
+
 from flask import Flask, request, json
 
 
@@ -28,17 +29,6 @@ weekDays = [[0, 'понедельник'],
                 [4, 'пятница'],
                 [5, 'суббота'],
                 [6, 'воскресенье']]
-
-previous_message_id = 0
-callback = ''
-
-days = []
-timez = []
-z = 0
-
-pupil_id = 0
-chat_counter = 0
-chat_isOver = 1
 
 
 def start_command(evento):
@@ -88,8 +78,20 @@ def start_command(evento):
                             print(previous_message_id)
                             break
                     else:
+                        vk.messages.send(peer_id=evento.obj.from_id,
+                                         message='В фигурных скобках пишутся варианты ответа на сообщения бота. \n'
+                                                 'Например: {да, нет}.\n'
+                                                 'Если вы введете, что-то кроме них, введите "Начать"\n'
+                                                 'Если бот перестал отвечать на сообщения, введите "Начать"\n',
+                                         random_id=get_random_id())
                         new_user(event)
                 else:
+                    vk.messages.send(peer_id=evento.obj.from_id,
+                                     message='В фигурных скобках пишутся варианты ответа на сообщения бота. \n'
+                                     'Например: {да, нет}.\n'
+                                     'Если вы введете, что-то кроме них, введите "Начать"\n'
+                                     'Если бот перестал отвечать на сообщения, введите "Начать"\n',
+                                     random_id=get_random_id())
                     new_user(event)
 
 
@@ -168,6 +170,9 @@ def create_timetable(evento):
                     conn.commit()
         k += 1
 
+    cursor.execute(f"update teachers set is_created_timetable = '1' "
+                   f"where teacher_id = {evento.obj.from_id}")
+
     vk.messages.send(peer_id=evento.obj.from_id,
                      message="График занятий создан",
                      random_id=get_random_id())
@@ -179,18 +184,21 @@ def create_timetable(evento):
 
 def pupils(evento):
 
-    cursor.execute('SELECT * FROM Users')
+    cursor.execute('SELECT * FROM Users ORDER BY lesson_weekday, lesson_time')
     data_arr = cursor.fetchall()
 
     text = 'К вам записаны: \n\n'
 
     for data in data_arr:
         if data[5] == evento.obj.from_id:
-            text += f'{data[1]} в {data[3]} на {data[4]}'
+            text += f'{data[1]} в {data[3]} на {data[4]}\n'
 
     vk.messages.send(peer_id=evento.obj.from_id,
                      message=text,
                      random_id=get_random_id())
+
+
+# Чат
 
 
 # Функции ученика
@@ -200,7 +208,7 @@ def new_user(evento):
         webinars_sum = []
         k = 0
 
-        cursor.execute('SELECT * FROM paid_webinars')
+        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
         row = cursor.fetchall()
 
         for i in row:
@@ -233,13 +241,14 @@ def new_user(evento):
 
             global previous_message_id, callback
 
-            previous_message_id = event.obj.conversation_message_id
+            previous_message_id = event.obj.conversation_message_id + 1
             callback = 'weekday_pick'
             print(previous_message_id)
 
         else:
             vk.messages.send(peer_id=evento.obj.from_id,
-                             message='Извините, но занятия на этой неделе либо все заняты, либо на этой неделе их не будет',
+                             message='Извините, но занятия на этой неделе либо все заняты, '
+                                     'либо на этой неделе их не будет',
                              random_id=get_random_id())
 
 
@@ -276,7 +285,7 @@ def weekday_pick(evento, weekdayfromarr):
                            f" '0:00', '{callback_data[1]}')")
             conn.commit()
 
-        cursor.execute('SELECT * FROM paid_webinars')
+        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay, time')
         row = cursor.fetchall()
 
         text = ''
@@ -306,7 +315,7 @@ def time_pick(evento):
         cursor.execute('SELECT * FROM Users')
         data_arr = cursor.fetchall()
 
-        cursor.execute('SELECT * FROM paid_webinars')
+        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
         row = cursor.fetchall()
 
         callback_data = callback.split('/')
@@ -468,7 +477,7 @@ def continue_study(evento):
                         webinars_sum = []
                         k = 0
 
-                        cursor.execute('SELECT * FROM paid_webinars')
+                        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
                         row = cursor.fetchall()
 
                         for i in row:
@@ -519,7 +528,7 @@ def continue_study(evento):
                         webinars_sum = []
                         k = 0
 
-                        cursor.execute('SELECT * FROM paid_webinars')
+                        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
                         row = cursor.fetchall()
 
                         for i in row:
@@ -781,39 +790,30 @@ for event in longpoll.listen():
                 grade(event)
 
             if event.obj.conversation_message_id == previous_message_id + 2:
-                if callback == 'weekday_pick':
-                    cursor.execute('SELECT * FROM paid_webinars')
-                    row2 = cursor.fetchall()
-                    for weekDay in weekDays:
-                        if weekDay[1] in event.obj.text.lower():
-                            for data2 in row2:
-                                if weekDay[0] == data2[0]:
-                                    callback = f'{weekDay[1]}/{data2[3]}'
-                                    weekday_pick(event, weekDay)
-                                    break
+                print('pr + 2')
 
-                elif callback == 'timetable':
-                    for weekDay in weekDays:
-                        if weekDay[1] in event.obj.text.lower():
-                            timetable(event)
-                            break
-
-                elif callback == 'teacher_pick_new':
+                if event.obj.text.lower() == 'создать график занятий':
                     cursor.execute('SELECT * FROM teachers')
                     row2 = cursor.fetchall()
                     for teacher in row2:
-                        if event.obj.text == str(teacher[1]):
-                            teacher_pick2(event)
-                            break
+                        if event.obj.from_id == teacher[0]:
+                            if teacher[3] == 1:
+                                print('teacher 1')
+                                cursor.execute(f"DELETE FROM `paid_webinars` WHERE `teacher_id`={event.obj.from_id}")
+                                cursor.execute(f"update teachers set is_created_timetable = '0' "
+                                               f"where teacher_id = {event.obj.from_id}")
+                                conn.commit()
 
-                elif event.obj.text.lower() == 'создать график занятий':
-                    vk.messages.send(peer_id=event.obj.from_id,
-                                     message='Введите через запятую, в какие дни вы хотели бы работать.'
-                                             '\n\n'
-                                             'Например: Понедельник, вторник, пятница',
-                                     random_id=get_random_id())
-                    callback = 'timetable'
-                    previous_message_id = event.obj.conversation_message_id
+                            vk.messages.send(peer_id=event.obj.from_id,
+                                             message='При повторном вводе этой команды все предыдущие записи '
+                                                     'о занятиях будут стерты.\n'
+                                                     'Введите через запятую, в какие дни вы хотели бы работать.'
+                                                     '\n\n'
+                                                     'Например: Понедельник, вторник, пятница',
+                                             random_id=get_random_id())
+                            callback = 'timetable'
+                            previous_message_id = event.obj.conversation_message_id
+                            break
 
                 elif event.obj.text.lower() == 'посмотреть записанных учеников':
                     pupils(event)
@@ -850,11 +850,33 @@ for event in longpoll.listen():
                     chat_isOver = 1
                     start_command(event)
 
+                elif callback == 'weekday_pick':
+                    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
+                    row2 = cursor.fetchall()
+                    for weekDay in weekDays:
+                        if weekDay[1] in event.obj.text.lower():
+                            for data2 in row2:
+                                if weekDay[0] == data2[0]:
+                                    callback = f'{weekDay[1]}/{data2[3]}'
+                                    weekday_pick(event, weekDay)
+                                    break
+
+                elif callback == 'timetable':
+                    for weekDay in weekDays:
+                        if weekDay[1] in event.obj.text.lower():
+                            timetable(event)
+                            break
+
+                elif callback == 'teacher_pick_new':
+                    cursor.execute('SELECT * FROM teachers')
+                    row2 = cursor.fetchall()
+                    for teacher in row2:
+                        if event.obj.text == str(teacher[1]):
+                            teacher_pick2(event)
+                            break
+
                 else:
                     vk.messages.send(peer_id=event.obj.from_id,
                                      message='Введите сообщение правильно',
                                      random_id=get_random_id())
                     previous_message_id += 2
-
-
-

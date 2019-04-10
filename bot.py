@@ -105,11 +105,26 @@ def callback_handler(callback_query: CallbackQuery):
         time_pick(callback_query)
 
     if callback_query.data == 'timetable':
-        bot.send_message(callback_query.message.chat.id,
-                         'Введите через запятую, в какие дни вы хотели бы работать.'
-                         '\n\n'
-                         'Например: Понедельник, вторник, пятница')
-        bot.register_next_step_handler(callback_query.message, timetable)
+
+        cursor.execute('SELECT * FROM teachers')
+        row2 = cursor.fetchall()
+        for teacher in row2:
+            if callback_query.message.chat.id == teacher[0]:
+                if teacher[3] == 1:
+                    print('teacher 1')
+                    cursor.execute(f"DELETE FROM `paid_webinars` WHERE `teacher_id`={callback_query.message.chat.id}")
+                    cursor.execute(f"update teachers set is_created_timetable = '0' "
+                                   f"where teacher_id = {callback_query.message.chat.id}")
+                    conn.commit()
+
+                bot.send_message(callback_query.message.chat.id,
+                                 'При повторном вводе этой команды все предыдущие записи '
+                                 'о занятиях будут стерты.\n'
+                                 'Введите через запятую, в какие дни вы хотели бы работать.'
+                                 '\n\n'
+                                 'Например: Понедельник, вторник, пятница')
+                bot.register_next_step_handler(callback_query.message, timetable)
+                break
 
     if callback_query.data == 'pupils':
         pupils(callback_query)
@@ -258,7 +273,7 @@ def new_user(message):
     webinars_sum = []
     k = 0
 
-    cursor.execute('SELECT * FROM paid_webinars')
+    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
 
     row = cursor.fetchall()
 
@@ -324,7 +339,7 @@ def weekday_pick(information, weekdayfromarr):
                        f" '0:00', '{callback[1]}')")
         conn.commit()
 
-    cursor.execute('SELECT * FROM paid_webinars')
+    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay, time')
     row = cursor.fetchall()
 
     keyboard = InlineKeyboardMarkup()
@@ -345,7 +360,7 @@ def time_pick(information):
     cursor.execute('SELECT * FROM Users')
     data_arr = cursor.fetchall()
 
-    cursor.execute('SELECT * FROM paid_webinars')
+    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
     row = cursor.fetchall()
 
     information.data = information.data.split('/')
@@ -647,7 +662,7 @@ def continue_study(information):
                     webinars_sum = []
                     k = 0
 
-                    cursor.execute('SELECT * FROM paid_webinars')
+                    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
                     row = cursor.fetchall()
 
                     for i in row:
@@ -684,7 +699,7 @@ def continue_study(information):
                     webinars_sum = []
                     k = 0
 
-                    cursor.execute('SELECT * FROM paid_webinars')
+                    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
 
                     row = cursor.fetchall()
 
@@ -836,7 +851,7 @@ def create_timetable(information):
 
 def pupils(information):
 
-    cursor.execute('SELECT * FROM Users')
+    cursor.execute('SELECT * FROM Users ORDER BY lesson_weekday, lesson_time')
     data_arr = cursor.fetchall()
 
     text = 'К вам записаны: \n\n'
