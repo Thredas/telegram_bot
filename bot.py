@@ -298,11 +298,13 @@ def new_user(message):
             keyboard.add(
                 InlineKeyboardButton(weekDays[i][1].capitalize(), callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-        bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
-                                          'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+        bot.edit_message_text('Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                              'На какой день недели вы хотели бы записаться?',
+                              message.chat.id, message.message_id, reply_markup=keyboard)
+
     else:
-        bot.send_message(message.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
-                                          'либо на этой неделе их не будет')
+        bot.edit_message_text('Извините, но занятия на этой неделе либо все заняты, '
+                              'либо на этой неделе их не будет', message.chat.id, message.message_id)
 
 
 def weekday_pick(information, weekdayfromarr):
@@ -687,12 +689,13 @@ def continue_study(information):
                                 InlineKeyboardButton(weekDays[i][1].capitalize(),
                                                      callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-                        bot.send_message(information.chat.id,
-                                         'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
-                                         'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+                        bot.edit_message_text('На какой день недели вы хотели бы записаться?', information.message.chat.id,
+                                              information.message.message_id, reply_markup=keyboard)
                     else:
-                        bot.send_message(information.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
-                                                              'либо на этой неделе их не будет')
+                        bot.edit_message_text('Извините, но занятия на этой неделе либо все заняты, '
+                                              'либо на этой неделе их не будет',
+                                              information.message.chat.id,
+                                              information.message.message_id)
                     break
 
                 elif data[2] < 13:
@@ -727,12 +730,14 @@ def continue_study(information):
                                 InlineKeyboardButton(weekDays[i][1].capitalize(),
                                                      callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-                        bot.send_message(information.chat.id,
-                                         'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
-                                         'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
+                        bot.edit_message_text('На какой день недели вы хотели бы записаться?',
+                                              information.message.chat.id,
+                                              information.message.message_id, reply_markup=keyboard)
                     else:
-                        bot.send_message(information.chat.id, 'Извините, но занятия на этой неделе либо все заняты, '
-                                                              'либо на этой неделе их не будет')
+                        bot.edit_message_text('Извините, но занятия на этой неделе либо все заняты, '
+                                              'либо на этой неделе их не будет',
+                                              information.message.chat.id,
+                                              information.message.message_id)
                     break
 
         else:

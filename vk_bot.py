@@ -285,7 +285,7 @@ def weekday_pick(evento, weekdayfromarr):
                            f" '0:00', '{callback_data[1]}')")
             conn.commit()
 
-        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay, time')
+        cursor.execute('SELECT * FROM paid_webinars ORDER BY time')
         row = cursor.fetchall()
 
         text = ''
