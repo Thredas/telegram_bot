@@ -130,24 +130,91 @@ def timetable(evento):
                     work_days.append(db_days)
                     break
     else:
-        for weekDay2 in weekDays:
-            if weekDay2[1] in evento.obj.text.lower():
-                if ',' in evento.obj.text:
-                    work_days = evento.obj.text.lower().split(', ')
-                    cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
-                                   f"where teacher_id = {evento.obj.from_id}")
-                    conn.commit()
-                    break
-                else:
-                    work_days.append(evento.obj.text.lower())
-                    cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
-                                   f"where teacher_id = {evento.obj.from_id}")
-                    conn.commit()
-                    break
+        if text_is_correct(evento.obj.text, False):
+            for weekDay2 in weekDays:
+                if weekDay2[1] in evento.obj.text.lower():
+                    if ',' in evento.obj.text:
+                        work_days = evento.obj.text.lower().split(', ')
+                        cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
+                                       f"where teacher_id = {evento.obj.from_id}")
+                        conn.commit()
+                        break
+                    else:
+                        work_days.append(evento.obj.text.lower())
+                        cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
+                                       f"where teacher_id = {evento.obj.from_id}")
+                        conn.commit()
+                        break
+        else:
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message=f'Введите день недели правильно',
+                             random_id=get_random_id())
 
-    if counter < len(work_days):
+            cursor.execute(
+                f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where teacher_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update teachers set callback = 'timetable' where teacher_id = {evento.obj.from_id}")
+            conn.commit()
+
+    if len(work_days) != 0:
+        if counter < len(work_days):
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message=f'Введите через запятую, в какое время в {work_days[counter]} '
+                             f'вы хотели бы работать.',
+                             random_id=get_random_id())
+
+            cursor.execute(
+                f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where teacher_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update teachers set callback = 'time_in_timetable' where teacher_id = {evento.obj.from_id}")
+            conn.commit()
+        else:
+            k = 1
+            text = ''
+
+            times = []
+
+            for time in work_times:
+                times.append(time.split(', '))
+
+            for day in work_days:
+                time_text = ''
+                for time in times[k]:
+                    time_text += time + ', '
+
+                text += f'В {day} в: {time_text}\n'
+                k += 1
+
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message=f'Значит, вы хотите работать: \n{text}'
+                             '\n{да, нет}',
+                             random_id=get_random_id())
+
+            cursor.execute(
+                f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where teacher_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update teachers set callback = 'create_timetable' where teacher_id = {evento.obj.from_id}")
+            conn.commit()
+
+
+def time_in_timetable(evento):
+    if text_is_correct(evento.obj.text, True):
+        cursor.execute(
+            f"update teachers set counter = counter + 1 "
+            f"where teacher_id = {evento.obj.from_id}")
+        cursor.execute(
+            f"update teachers set times = CONCAT_WS('/', times, '{evento.obj.text}') "
+            f"where teacher_id = {evento.obj.from_id}")
+        conn.commit()
+
+        timetable(evento)
+
+    else:
         vk.messages.send(peer_id=evento.obj.from_id,
-                         message=f'Введите через запятую, в какое время в {work_days[counter]} вы хотели бы работать.',
+                         message=f'Введите время правильно',
                          random_id=get_random_id())
 
         cursor.execute(
@@ -156,46 +223,6 @@ def timetable(evento):
         cursor.execute(
             f"update teachers set callback = 'time_in_timetable' where teacher_id = {evento.obj.from_id}")
         conn.commit()
-    else:
-        k = 1
-        text = ''
-
-        times = []
-
-        for time in work_times:
-            times.append(time.split(', '))
-
-        for day in work_days:
-            time_text = ''
-            for time in times[k]:
-                time_text += time + ', '
-
-            text += f'В {day} в: {time_text}\n'
-            k += 1
-
-        vk.messages.send(peer_id=evento.obj.from_id,
-                         message=f'Значит, вы хотите работать: \n{text}'
-                                 '\n{да, нет}',
-                         random_id=get_random_id())
-
-        cursor.execute(
-            f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
-            f"where teacher_id = {evento.obj.from_id}")
-        cursor.execute(
-            f"update teachers set callback = 'create_timetable' where teacher_id = {evento.obj.from_id}")
-        conn.commit()
-
-
-def time_in_timetable(evento):
-    cursor.execute(
-        f"update teachers set counter = counter + 1 "
-        f"where teacher_id = {evento.obj.from_id}")
-    cursor.execute(
-        f"update teachers set times = CONCAT_WS('/', times, '{evento.obj.text}') "
-        f"where teacher_id = {evento.obj.from_id}")
-    conn.commit()
-
-    timetable(evento)
 
 
 def create_timetable(evento):
@@ -258,6 +285,62 @@ def create_timetable(evento):
                      message="График занятий создан",
                      random_id=get_random_id())
     start_command(evento)
+
+
+def text_is_correct(text, isTime):
+    if isTime:
+        if ":" in text:
+            if ',' in text:
+                texts = text.split(', ')
+                for tex in texts:
+                    if ':' in tex:
+                        reg = tex.split(':')
+                        if reg[0] != '' and reg[1] != '':
+                            if int(reg[0]) > 23 or int(reg[1]) > 59 or reg[1] == '0':
+                                return False
+                        else:
+                            return False
+                    else:
+                        return False
+
+                else:
+                    return True
+            else:
+                reg = text.split(':')
+                if reg[0] != '' and reg[1] != '':
+                    if int(reg[0]) > 23 or int(reg[1]) > 59 or reg[1] == '0':
+                        return False
+                    else:
+                        return True
+                else:
+                    return False
+        else:
+            return False
+
+    else:
+        if ',' in text:
+            texts = text.split(', ')
+            a = False
+            for tex in texts:
+                for weekDay in weekDays:
+                    if tex.lower() != weekDay[1]:
+                        continue
+                    else:
+                        a = True
+                        break
+                else:
+                    a = False
+
+            if a:
+                return True
+            else:
+                return False
+        else:
+            for weekDay in weekDays:
+                if text.lower() == weekDay[1]:
+                    return True
+            else:
+                return False
 
 
 def pupils(evento):
@@ -1004,10 +1087,7 @@ for event in longpoll.listen():
                                     break
 
                 elif callback[0] == 'timetable':
-                    for weekDay in weekDays:
-                        if weekDay[1] in event.obj.text.lower():
-                            timetable(event)
-                            break
+                    timetable(event)
 
                 elif callback[0] == 'teacher_pick_new':
                     cursor.execute('SELECT * FROM teachers')

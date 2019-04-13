@@ -816,62 +816,129 @@ def timetable(message: Message):
                     work_days.append(db_days)
                     break
     else:
-        for weekDay2 in weekDays:
-            if weekDay2[1] in message.text.lower():
-                if ',' in message.text:
-                    work_days = message.text.lower().split(', ')
-                    cursor.execute(f"update teachers set days = '{message.text.lower()}'"
-                                   f"where teacher_id = {message.chat.id}")
-                    conn.commit()
-                    break
-                else:
-                    work_days.append(message.text.lower())
-                    cursor.execute(f"update teachers set days = '{message.text.lower()}'"
-                                   f"where teacher_id = {message.chat.id}")
-                    conn.commit()
-                    break
+        if text_is_correct(message.text, False):
+            for weekDay2 in weekDays:
+                if weekDay2[1] in message.text.lower():
+                    if ',' in message.text:
+                        work_days = message.text.lower().split(', ')
+                        cursor.execute(f"update teachers set days = '{message.text.lower()}'"
+                                       f"where teacher_id = {message.chat.id}")
+                        conn.commit()
+                        break
+                    else:
+                        work_days.append(message.text.lower())
+                        cursor.execute(f"update teachers set days = '{message.text.lower()}'"
+                                       f"where teacher_id = {message.chat.id}")
+                        conn.commit()
+                        break
+        else:
+            bot.send_message(message.chat.id,
+                             f'Введите день недели праильно.')
+            bot.register_next_step_handler(message, timetable)
 
     print(work_days)
 
-    if counter < len(work_days):
-        bot.send_message(message.chat.id,
-                         f'Введите через запятую, в какое время в {work_days[counter]} вы хотели бы работать.')
-        bot.register_next_step_handler(message, time_in_timetable)
+    if len(work_days) != 0:
+        if counter < len(work_days):
+            bot.send_message(message.chat.id,
+                             f'Введите через запятую, в какое время в {work_days[counter]} вы хотели бы работать.')
+            bot.register_next_step_handler(message, time_in_timetable)
 
-    else:
-        k = 1
-        text = ''
+        else:
+            k = 1
+            text = ''
 
-        times = []
+            times = []
 
-        for time in work_times:
-            times.append(time.split(', '))
+            for time in work_times:
+                times.append(time.split(', '))
 
-        for day in work_days:
-            time_text = ''
-            for time in times[k]:
-                time_text += time + ', '
+            for day in work_days:
+                time_text = ''
+                for time in times[k]:
+                    time_text += time + ', '
 
-            text += f'В {day} в: {time_text}\n'
-            k += 1
+                text += f'В {day} в: {time_text}\n'
+                k += 1
 
-        keyboard = InlineKeyboardMarkup()
-        keyboard.add(InlineKeyboardButton('Да', callback_data='create_timetable'))
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton('Да', callback_data='create_timetable'))
 
-        bot.send_message(message.chat.id,
-                         f'Значит, вы хотите работать: \n{text}', reply_markup=keyboard)
+            bot.send_message(message.chat.id,
+                             f'Значит, вы хотите работать: \n{text}', reply_markup=keyboard)
 
 
 def time_in_timetable(message: Message):
-    cursor.execute(
-        f"update teachers set counter = counter + 1 "
-        f"where teacher_id = {message.chat.id}")
-    cursor.execute(
-        f"update teachers set times = CONCAT_WS('/', times, '{message.text}') "
-        f"where teacher_id = {message.chat.id}")
-    conn.commit()
+    if text_is_correct(message.text, True):
+        cursor.execute(
+            f"update teachers set counter = counter + 1 "
+            f"where teacher_id = {message.chat.id}")
+        cursor.execute(
+            f"update teachers set times = CONCAT_WS('/', times, '{message.text}') "
+            f"where teacher_id = {message.chat.id}")
+        conn.commit()
 
-    timetable(message)
+        timetable(message)
+    else:
+        bot.send_message(message.chat.id,
+                         f'Введите время праильно.')
+        bot.register_next_step_handler(message, time_in_timetable)
+
+
+def text_is_correct(text, isTime):
+    if isTime:
+        if ":" in text:
+            if ',' in text:
+                texts = text.split(', ')
+                for tex in texts:
+                    if ':' in tex:
+                        reg = tex.split(':')
+                        if reg[0] != '' and reg[1] != '':
+                            if int(reg[0]) > 23 or int(reg[1]) > 59 or reg[1] == '0':
+                                return False
+                        else:
+                            return False
+                    else:
+                        return False
+
+                else:
+                    return True
+            else:
+                reg = text.split(':')
+                if reg[0] != '' and reg[1] != '':
+                    if int(reg[0]) > 23 or int(reg[1]) > 59 or reg[1] == '0':
+                        return False
+                    else:
+                        return True
+                else:
+                    return False
+        else:
+            return False
+
+    else:
+        if ',' in text:
+            texts = text.split(', ')
+            a = False
+            for tex in texts:
+                for weekDay in weekDays:
+                    if tex.lower() != weekDay[1]:
+                        continue
+                    else:
+                        a = True
+                        break
+                else:
+                    a = False
+
+            if a:
+                return True
+            else:
+                return False
+        else:
+            for weekDay in weekDays:
+                if text.lower() == weekDay[1]:
+                    return True
+            else:
+                return False
 
 
 def create_timetable(information):
@@ -943,7 +1010,7 @@ def pupils(information):
 
     for data in data_arr:
         if data[5] == information.from_user.id:
-            text += f'{data[1]} в {data[3]} на {data[4]}'
+            text += f'{data[1]} в {data[3]} на {data[4]}\n'
 
     bot.send_message(information.message.chat.id, text)
     pass
