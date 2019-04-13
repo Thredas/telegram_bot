@@ -1,11 +1,8 @@
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.utils import get_random_id
-
 import mysql.connector
-
 from flask import Flask, request, json
-
 
 vk_session = vk_api.VkApi(
         token='c73b6c632962490a736292b8a5f28aac7de6d313308451b5867e3094e83a1d2d03699d0d30604d9840a0c')
@@ -23,12 +20,12 @@ print('MySQL connected')
 cursor = conn.cursor()
 
 weekDays = [[0, 'понедельник'],
-                [1, 'вторник'],
-                [2, 'среда'],
-                [3, 'четверг'],
-                [4, 'пятница'],
-                [5, 'суббота'],
-                [6, 'воскресенье']]
+            [1, 'вторник'],
+            [2, 'среда'],
+            [3, 'четверг'],
+            [4, 'пятница'],
+            [5, 'суббота'],
+            [6, 'воскресенье']]
 
 
 def start_command(evento):
@@ -43,9 +40,10 @@ def start_command(evento):
                                      '{Создать график занятий, \nпосмотреть записанных учеников}',
                                      random_id=get_random_id())
 
-                    global callback, previous_message_id
-                    previous_message_id = event.obj.conversation_message_id
-                    print(previous_message_id)
+                    cursor.execute(
+                        f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+                        f"where teacher_id = {evento.obj.from_id}")
+                    conn.commit()
                     break
             else:
                 cursor.execute('SELECT * FROM Users')
@@ -57,9 +55,9 @@ def start_command(evento):
 
                             day = 0
 
-                            for weekDay in weekDays:
-                                if data[3] == weekDay[1]:
-                                    day = weekDay[0]
+                            for weekDay2 in weekDays:
+                                if data[3] == weekDay2[1]:
+                                    day = weekDay2[0]
 
                             cursor.execute(
                                 f"update paid_webinars set isTaken = 0 "
@@ -73,9 +71,15 @@ def start_command(evento):
                                              '\n{да, нет}',
                                              random_id=get_random_id())
 
-                            callback = 'continue'
-                            previous_message_id = event.obj.conversation_message_id
-                            print(previous_message_id)
+                            cursor.execute(
+                                f"update Users set callback = 'continue' where user_id = {data[0]}")
+
+                            cursor.execute(
+                                f"update Users set previous_message_id = {int(evento.obj.conversation_message_id)} "
+                                f"where user_id = {data[0]}")
+                            conn.commit()
+
+                            print(data[6])
                             break
                     else:
                         vk.messages.send(peer_id=evento.obj.from_id,
@@ -99,35 +103,72 @@ def start_command(evento):
 
 
 def timetable(evento):
-    global days
+    cursor.execute(
+        f"select days from teachers "
+        f"where teacher_id = {evento.obj.from_id}")
+    db_days = cursor.fetchone()[0]
 
-    for weekDay2 in weekDays:
-        if weekDay2[1] in evento.obj.text.lower():
-            if ',' in evento.obj.text:
-                days = evento.obj.text.lower().split(', ')
-                break
-            else:
-                days.append(evento.obj.text.lower())
-                break
+    cursor.execute(
+        f"select counter from teachers "
+        f"where teacher_id = {evento.obj.from_id}")
+    counter = cursor.fetchone()[0]
 
-    print(days)
+    cursor.execute(
+        f"select times from teachers "
+        f"where teacher_id = {evento.obj.from_id}")
+    work_times = cursor.fetchone()[0].split('/')
 
-    if z != len(days):
+    work_days = []
+
+    if db_days != '':
+        for weekDay2 in weekDays:
+            if weekDay2[1] in db_days.lower():
+                if ',' in db_days.lower():
+                    work_days = db_days.split(', ')
+                    break
+                else:
+                    work_days.append(db_days)
+                    break
+    else:
+        for weekDay2 in weekDays:
+            if weekDay2[1] in evento.obj.text.lower():
+                if ',' in evento.obj.text:
+                    work_days = evento.obj.text.lower().split(', ')
+                    cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
+                                   f"where teacher_id = {evento.obj.from_id}")
+                    conn.commit()
+                    break
+                else:
+                    work_days.append(evento.obj.text.lower())
+                    cursor.execute(f"update teachers set days = '{evento.obj.text.lower()}'"
+                                   f"where teacher_id = {evento.obj.from_id}")
+                    conn.commit()
+                    break
+
+    if counter < len(work_days):
         vk.messages.send(peer_id=evento.obj.from_id,
-                         message=f'Введите через запятую, в какое время в {days[z]} вы хотели бы работать.',
+                         message=f'Введите через запятую, в какое время в {work_days[counter]} вы хотели бы работать.',
                          random_id=get_random_id())
 
-        global callback, previous_message_id
-        previous_message_id = event.obj.conversation_message_id
-        callback = 'time_in_timetable'
+        cursor.execute(
+            f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+            f"where teacher_id = {evento.obj.from_id}")
+        cursor.execute(
+            f"update teachers set callback = 'time_in_timetable' where teacher_id = {evento.obj.from_id}")
+        conn.commit()
     else:
-        k = 0
+        k = 1
         text = ''
 
-        for day in days:
+        times = []
+
+        for time in work_times:
+            times.append(time.split(', '))
+
+        for day in work_days:
             time_text = ''
-            for times in timez[k]:
-                time_text += times + ', '
+            for time in times[k]:
+                time_text += time + ', '
 
             text += f'В {day} в: {time_text}\n'
             k += 1
@@ -137,28 +178,60 @@ def timetable(evento):
                                  '\n{да, нет}',
                          random_id=get_random_id())
 
-        previous_message_id = event.obj.conversation_message_id
-        callback = 'create_timetable'
+        cursor.execute(
+            f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+            f"where teacher_id = {evento.obj.from_id}")
+        cursor.execute(
+            f"update teachers set callback = 'create_timetable' where teacher_id = {evento.obj.from_id}")
+        conn.commit()
 
 
 def time_in_timetable(evento):
-    global z
-    z += 1
-    timez.append(evento.obj.text.split(', '))
-    print(timez)
+    cursor.execute(
+        f"update teachers set counter = counter + 1 "
+        f"where teacher_id = {evento.obj.from_id}")
+    cursor.execute(
+        f"update teachers set times = CONCAT_WS('/', times, '{evento.obj.text}') "
+        f"where teacher_id = {evento.obj.from_id}")
+    conn.commit()
 
     timetable(evento)
 
 
 def create_timetable(evento):
-    global days, timez, z
-    k = 0
-    for day in days:
-        for weekDay in weekDays:
-            if day == weekDay[1]:
-                day = weekDay[0]
+    cursor.execute(
+        f"select days from teachers "
+        f"where teacher_id = {evento.obj.from_id}")
+    db_days = cursor.fetchone()[0]
 
-        for time in timez[k]:
+    cursor.execute(
+        f"select times from teachers "
+        f"where teacher_id = {evento.obj.from_id}")
+    work_times = cursor.fetchone()[0].split('/')
+
+    work_days = []
+
+    for weekDay2 in weekDays:
+        if weekDay2[1] in db_days.lower():
+            if ',' in db_days.lower():
+                work_days = db_days.split(', ')
+                break
+            else:
+                work_days.append(db_days)
+                break
+
+    times = []
+
+    for time in work_times:
+        times.append(time.split(', '))
+
+    k = 1
+    for day in work_days:
+        for weekDay2 in weekDays:
+            if day == weekDay2[1]:
+                day = weekDay2[0]
+
+        for time in times[k]:
             cursor.execute('SELECT * FROM teachers')
             data_arr = cursor.fetchall()
 
@@ -168,18 +241,23 @@ def create_timetable(evento):
                                    f"'{time}', '{data[2]}', {data[0]},"
                                    f" '{data[1]}', '0')")
                     conn.commit()
+                    break
         k += 1
 
     cursor.execute(f"update teachers set is_created_timetable = '1' "
                    f"where teacher_id = {evento.obj.from_id}")
+    cursor.execute(
+        f"update teachers set days = '', "
+        f"counter = 0, "
+        f"times = '',"
+        f"callback = '' "
+        f"where teacher_id = {evento.obj.from_id}")
+    conn.commit()
 
     vk.messages.send(peer_id=evento.obj.from_id,
                      message="График занятий создан",
                      random_id=get_random_id())
-
-    days = []
-    timez = []
-    z = 0
+    start_command(evento)
 
 
 def pupils(evento):
@@ -228,9 +306,9 @@ def new_user(evento):
 
         if len(webinars_sum) != 0:
             for data in webinars_sum:
-                for weekDay in weekDays:
-                    if data == weekDay[0]:
-                        text += weekDay[1] + '\n'
+                for weekDay2 in weekDays:
+                    if data == weekDay2[0]:
+                        text += weekDay2[1] + '\n'
 
             vk.messages.send(peer_id=evento.obj.from_id,
                              message='Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
@@ -239,11 +317,12 @@ def new_user(evento):
                                      '\n\nВведите на какой день недели вы хотели бы записаться.',
                              random_id=get_random_id())
 
-            global previous_message_id, callback
-
-            previous_message_id = event.obj.conversation_message_id + 1
-            callback = 'weekday_pick'
-            print(previous_message_id)
+            cursor.execute(
+                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where user_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update Users set callback = 'weekday_pick' where user_id = {evento.obj.from_id}")
+            conn.commit()
 
         else:
             vk.messages.send(peer_id=evento.obj.from_id,
@@ -253,11 +332,12 @@ def new_user(evento):
 
 
 def weekday_pick(evento, weekdayfromarr):
+        cursor.execute(f'SELECT callback FROM Users WHERE user_id = {evento.obj.from_id}')
+        callback2 = cursor.fetchone()
+        callback_data = callback2[0].split('/')
 
         cursor.execute('SELECT * FROM Users')
         data_arr = cursor.fetchall()
-
-        callback_data = callback.split('/')
 
         if len(data_arr) > 0:
             for data in data_arr:
@@ -277,12 +357,13 @@ def weekday_pick(evento, weekdayfromarr):
                 cursor.execute(f"insert into Users values ({int(evento.obj.from_id)}, "
                                f"'{str(vk.users.get(user_ids=evento.obj.from_id)[0]['first_name'])}', "
                                f"0, '{callback_data[0]}',"
-                               f" '0:00', '{callback_data[1]}')")
+                               f" '0:00', '{callback_data[1]}', 0, '')")
                 conn.commit()
         else:
             cursor.execute(f"insert into Users values ({int(evento.obj.from_id)}, "
-                           f"'{str(vk.users.get(user_ids=evento.obj.from_id)[0]['first_name'])}', 0, '{callback_data[0]}',"
-                           f" '0:00', '{callback_data[1]}')")
+                           f"'{str(vk.users.get(user_ids=evento.obj.from_id)[0]['first_name'])}', 0, "
+                           f"'{callback_data[0]}', "
+                           f"'0:00', '{callback_data[1]}', 0, '')")
             conn.commit()
 
         cursor.execute('SELECT * FROM paid_webinars ORDER BY time')
@@ -303,14 +384,17 @@ def weekday_pick(evento, weekdayfromarr):
                          '\n\nВведите на какое время вы хотели бы записаться.',
                          random_id=get_random_id())
 
-        global previous_message_id
-
-        previous_message_id = evento.obj.conversation_message_id
+        cursor.execute(
+            f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+            f"where user_id = {evento.obj.from_id}")
+        conn.commit()
         print(previous_message_id)
 
 
 def time_pick(evento):
-        global previous_message_id, callback
+        cursor.execute(f'SELECT callback FROM Users WHERE user_id = {evento.obj.from_id}')
+        callback2 = cursor.fetchone()
+        callback_data = callback2[0].split('/')
 
         cursor.execute('SELECT * FROM Users')
         data_arr = cursor.fetchall()
@@ -318,11 +402,9 @@ def time_pick(evento):
         cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
         row = cursor.fetchall()
 
-        callback_data = callback.split('/')
-
-        for weekDay in weekDays:
-            if callback_data[0] == weekDay[1]:
-                callback_data[0] = weekDay[0]
+        for weekDay2 in weekDays:
+            if callback_data[0] == weekDay2[1]:
+                callback_data[0] = weekDay2[0]
                 break
 
         evento.obj.text = (str(callback_data[0]) + '/' + evento.obj.text).split('/')
@@ -350,9 +432,9 @@ def time_pick(evento):
 
                         print('message modified')
 
-                        for weekDay in weekDays:
-                            if evento.obj.text[0] == str(weekDay[0]):
-                                evento.obj.text[0] = weekDay[1]
+                        for weekDay2 in weekDays:
+                            if evento.obj.text[0] == str(weekDay2[0]):
+                                evento.obj.text[0] = weekDay2[1]
 
                         cursor.execute('SELECT * FROM Users')
                         data_arr = cursor.fetchall()
@@ -366,9 +448,13 @@ def time_pick(evento):
                                                                  '\n{да, нет}',
                                                          random_id=get_random_id())
 
-                                        previous_message_id = evento.obj.conversation_message_id + 1
-                                        print(previous_message_id)
-                                        callback = 'buy'
+                                        cursor.execute(
+                                            f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                                            f"where user_id = {evento.obj.from_id}")
+                                        cursor.execute(
+                                            f"update Users set callback = 'buy' "
+                                            f"where user_id = {evento.obj.from_id}")
+                                        conn.commit()
                                         break
                             else:
                                 for data in data_arr:
@@ -417,9 +503,9 @@ def time_pick(evento):
                                              random_id=get_random_id())
                             print('message modified')
 
-                            for weekDay in weekDays:
-                                if evento.obj.text[0] == str(weekDay[0]):
-                                    evento.obj.text[0] = weekDay[1]
+                            for weekDay2 in weekDays:
+                                if evento.obj.text[0] == str(weekDay2[0]):
+                                    evento.obj.text[0] = weekDay2[1]
 
                             cursor.execute('SELECT * FROM Users')
                             data_arr = cursor.fetchall()
@@ -433,9 +519,14 @@ def time_pick(evento):
                                                                      '\n{да, нет}',
                                                              random_id=get_random_id())
 
-                                            previous_message_id = evento.obj.conversation_message_id + 1
-                                            print(previous_message_id)
-                                            callback = 'buy'
+                                            cursor.execute(
+                                                f"update Users set previous_message_id = "
+                                                f"{evento.obj.conversation_message_id} "
+                                                f"where user_id = {evento.obj.from_id}")
+                                            cursor.execute(
+                                                f"update Users set callback = 'buy' "
+                                                f"where user_id = {evento.obj.from_id}")
+                                            conn.commit()
                                             break
                                 else:
                                     for data in data_arr:
@@ -459,7 +550,8 @@ def time_pick(evento):
                                             break
 
                                     vk.messages.send(peer_id=evento.obj.from_id,
-                                                     message="Чтобы получить домашнее задание, введите 'домашняя работа'",
+                                                     message="Чтобы получить домашнее задание, "
+                                                             "введите 'домашняя работа'",
                                                      random_id=get_random_id())
                                     conn.commit()
                                     break
@@ -499,22 +591,25 @@ def continue_study(evento):
 
                         if len(webinars_sum) != 0:
                             for data in webinars_sum:
-                                for weekDay in weekDays:
-                                    if data == weekDay[0]:
-                                        text += weekDay[1] + '\n'
+                                for weekDay2 in weekDays:
+                                    if data == weekDay2[0]:
+                                        text += weekDay2[1] + '\n'
 
                             vk.messages.send(peer_id=evento.obj.from_id,
-                                             message='Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+                                             message='Зравствуйте, давайте согласуем дату и время '
+                                                     'первого демо-занятия.\n\n'
                                              f'Занятия будут проводится в следующие дни недели:\n\n'
                                              f'{text}'
                                                      '\n\nВведите на какой день недели вы хотели бы записаться.',
                                              random_id=get_random_id())
 
-                            global previous_message_id, callback
-
-                            previous_message_id = event.obj.conversation_message_id
-                            callback = 'weekday_pick'
-                            print(previous_message_id)
+                            cursor.execute(
+                                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                                f"where user_id = {evento.obj.from_id}")
+                            cursor.execute(
+                                f"update Users set callback = 'weekday_pick' "
+                                f"where user_id = {evento.obj.from_id}")
+                            conn.commit()
                             break
 
                         else:
@@ -553,9 +648,9 @@ def continue_study(evento):
 
                         if len(webinars_sum) != 0:
                             for data in webinars_sum:
-                                for weekDay in weekDays:
-                                    if data == weekDay[0]:
-                                        text += weekDay[1] + '\n'
+                                for weekDay2 in weekDays:
+                                    if data == weekDay2[0]:
+                                        text += weekDay2[1] + '\n'
 
                             vk.messages.send(peer_id=evento.obj.from_id,
                                              message=f'Занятия будут проводится в следующие дни недели:\n\n'
@@ -563,9 +658,13 @@ def continue_study(evento):
                                              '\n\nВведите на какой день недели вы хотели бы записаться.',
                                              random_id=get_random_id())
 
-                            previous_message_id = event.obj.conversation_message_id
-                            callback = 'weekday_pick'
-                            print(previous_message_id)
+                            cursor.execute(
+                                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                                f"where user_id = {evento.obj.from_id}")
+                            cursor.execute(
+                                f"update Users set callback = 'weekday_pick' "
+                                f"where user_id = {evento.obj.from_id}")
+                            conn.commit()
                             break
 
                         else:
@@ -596,9 +695,9 @@ def process_successful_payment(evento):
                 if data[0] == evento.obj.from_id:
                     if data[2] >= 13:
 
-                        for weekDay in weekDays:
-                            if data[3] == weekDay[1]:
-                                day = weekDay[0]
+                        for weekDay2 in weekDays:
+                            if data[3] == weekDay2[1]:
+                                day = weekDay2[0]
 
                         cursor.execute(
                             f"update paid_webinars set isTaken = 0 "
@@ -633,19 +732,20 @@ def process_successful_payment(evento):
                                  '\n{Выбрать нового, Оставить текущего}',
                          random_id=get_random_id())
 
-        global previous_message_id
-
-        previous_message_id = evento.obj.conversation_message_id + 2
-        print(previous_message_id)
+        cursor.execute(
+            f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+            f"where user_id = {evento.obj.from_id}")
+        conn.commit()
 
 
 def teacher_pick(evento):
-        global previous_message_id, callback
+        cursor.execute(f'SELECT callback FROM Users WHERE user_id = {evento.obj.from_id}')
+        callback2 = cursor.fetchone()
 
         cursor.execute('SELECT * FROM teachers')
         row = cursor.fetchall()
 
-        if callback == 'teacher_pick_new':
+        if callback2[0] == 'teacher_pick_new':
             text = ''
 
             for data in row:
@@ -657,8 +757,10 @@ def teacher_pick(evento):
                                      '\n\nВведите имя выбранного учителя',
                              random_id=get_random_id())
 
-            previous_message_id = event.obj.conversation_message_id
-            print(previous_message_id)
+            cursor.execute(
+                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where user_id = {evento.obj.from_id}")
+            conn.commit()
 
         else:
             vk.messages.send(peer_id=evento.obj.from_id,
@@ -668,9 +770,14 @@ def teacher_pick(evento):
                              message=f"Желаете записаться на следующее занятие?"
                              '\n{да, нет}',
                              random_id=get_random_id())
-            callback = 'continue'
-            previous_message_id = event.obj.conversation_message_id + 1
-            print(previous_message_id)
+
+            cursor.execute(
+                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where user_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update Users set callback = 'continue' "
+                f"where user_id = {evento.obj.from_id}")
+            conn.commit()
 
 
 def teacher_pick2(evento):
@@ -683,9 +790,9 @@ def teacher_pick2(evento):
 
         teacher_id = 0
 
-        for teacher in row:
-            if evento.obj.text == str(teacher[1]):
-                teacher_id = teacher[0]
+        for teacher2 in row:
+            if evento.obj.text == str(teacher2[1]):
+                teacher_id = teacher2[0]
                 break
 
         for data in data_arr:
@@ -696,9 +803,9 @@ def teacher_pick2(evento):
 
                 day = 0
 
-                for weekDay in weekDays:
-                    if data[3] == weekDay[1]:
-                        day = weekDay[0]
+                for weekDay2 in weekDays:
+                    if data[3] == weekDay2[1]:
+                        day = weekDay2[0]
 
                 cursor.execute(
                     f"update paid_webinars set isTaken = 0 "
@@ -716,10 +823,13 @@ def teacher_pick2(evento):
                          '\n{да, нет}',
                          random_id=get_random_id())
 
-        global previous_message_id, callback
-        callback = 'continue'
-        previous_message_id = event.obj.conversation_message_id + 1
-        print(previous_message_id)
+        cursor.execute(
+            f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+            f"where user_id = {evento.obj.from_id}")
+        cursor.execute(
+            f"update Users set callback = 'continue' "
+            f"where user_id = {evento.obj.from_id}")
+        conn.commit()
 
 
 def home_work(evento):
@@ -771,10 +881,13 @@ def grade(evento):
                                      '\n{да, нет}',
                                      random_id=get_random_id())
 
-                    global previous_message_id, callback
-                    callback = 'continue'
-                    previous_message_id = event.obj.conversation_message_id + 1
-                    print(previous_message_id)
+                    cursor.execute(
+                        f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                        f"where user_id = {evento.obj.from_id}")
+                    cursor.execute(
+                        f"update Users set callback = 'continue' "
+                        f"where user_id = {evento.obj.from_id}")
+                    conn.commit()
                     break
 
 
@@ -789,8 +902,23 @@ for event in longpoll.listen():
             elif event.obj.text.lower() == 'оценка':
                 grade(event)
 
-            if event.obj.conversation_message_id == previous_message_id + 2:
-                print('pr + 2')
+            cursor.execute(f"SELECT teacher_id FROM teachers")
+            teacher_ids = cursor.fetchall()
+
+            for teacher_id in teacher_ids:
+                if teacher_id[0] == event.obj.from_id:
+                    cursor.execute(f"SELECT previous_message_id FROM teachers WHERE teacher_id = {event.obj.from_id}")
+                    previous_message_id = cursor.fetchone()
+                    cursor.execute(f'SELECT callback FROM teachers WHERE teacher_id = {event.obj.from_id}')
+                    callback = cursor.fetchone()
+                    break
+            else:
+                cursor.execute(f"SELECT previous_message_id FROM Users WHERE user_id = {event.obj.from_id}")
+                previous_message_id = cursor.fetchone()
+                cursor.execute(f'SELECT callback FROM Users WHERE user_id = {event.obj.from_id}')
+                callback = cursor.fetchone()
+
+            if event.obj.conversation_message_id == previous_message_id[0] + 2:
 
                 if event.obj.text.lower() == 'создать график занятий':
                     cursor.execute('SELECT * FROM teachers')
@@ -800,6 +928,11 @@ for event in longpoll.listen():
                             if teacher[3] == 1:
                                 print('teacher 1')
                                 cursor.execute(f"DELETE FROM `paid_webinars` WHERE `teacher_id`={event.obj.from_id}")
+
+                                cursor.execute(f"update Users set lesson_weekday = '',"
+                                               f"lesson_time = '' "
+                                               f"where teacher_id = {event.obj.from_id}")
+
                                 cursor.execute(f"update teachers set is_created_timetable = '0' "
                                                f"where teacher_id = {event.obj.from_id}")
                                 conn.commit()
@@ -811,32 +944,38 @@ for event in longpoll.listen():
                                                      '\n\n'
                                                      'Например: Понедельник, вторник, пятница',
                                              random_id=get_random_id())
-                            callback = 'timetable'
-                            previous_message_id = event.obj.conversation_message_id
-                            break
+                            cursor.execute(
+                                f"update teachers set previous_message_id = {event.obj.conversation_message_id} "
+                                f"where teacher_id = {event.obj.from_id}")
+                            cursor.execute(
+                                f"update teachers set callback = 'timetable' "
+                                f"where teacher_id = {event.obj.from_id}")
+                            conn.commit()
+
+                        break
 
                 elif event.obj.text.lower() == 'посмотреть записанных учеников':
                     pupils(event)
 
                 elif ':' in event.obj.text.lower():
-                    if callback == 'time_in_timetable':
+                    if callback[0] == 'time_in_timetable':
                         time_in_timetable(event)
                     else:
                         time_pick(event)
 
                 elif event.obj.text.lower() == 'да':
-                    if callback == 'continue':
+                    if callback[0] == 'continue':
                         continue_study(event)
-                    elif callback == 'buy':
+                    elif callback[0] == 'buy':
                         buy(event)
-                    elif callback == 'create_timetable':
+                    elif callback[0] == 'create_timetable':
                         create_timetable(event)
 
                 elif event.obj.text.lower() == 'выбрать нового' or event.obj.text.lower() == 'оставить текущего':
                     if event.obj.text.lower() == 'выбрать нового':
-                        callback = 'teacher_pick_new'
+                        callback[0] = 'teacher_pick_new'
                     else:
-                        callback = 'teacher_pick_old'
+                        callback[0] = 'teacher_pick_old'
                     teacher_pick(event)
 
                 elif event.obj.text.lower() == 'нет':
@@ -850,24 +989,27 @@ for event in longpoll.listen():
                     chat_isOver = 1
                     start_command(event)
 
-                elif callback == 'weekday_pick':
+                elif callback[0] == 'weekday_pick':
                     cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
                     row2 = cursor.fetchall()
                     for weekDay in weekDays:
                         if weekDay[1] in event.obj.text.lower():
                             for data2 in row2:
                                 if weekDay[0] == data2[0]:
-                                    callback = f'{weekDay[1]}/{data2[3]}'
+                                    cursor.execute(
+                                        f"update Users set callback = '{weekDay[1]}/{data2[3]}' "
+                                        f"where user_id = {event.obj.from_id}")
+                                    conn.commit()
                                     weekday_pick(event, weekDay)
                                     break
 
-                elif callback == 'timetable':
+                elif callback[0] == 'timetable':
                     for weekDay in weekDays:
                         if weekDay[1] in event.obj.text.lower():
                             timetable(event)
                             break
 
-                elif callback == 'teacher_pick_new':
+                elif callback[0] == 'teacher_pick_new':
                     cursor.execute('SELECT * FROM teachers')
                     row2 = cursor.fetchall()
                     for teacher in row2:
@@ -879,4 +1021,7 @@ for event in longpoll.listen():
                     vk.messages.send(peer_id=event.obj.from_id,
                                      message='Введите сообщение правильно',
                                      random_id=get_random_id())
-                    previous_message_id += 2
+                    cursor.execute(
+                        f"update Users set previous_message_id = {int(event.obj.conversation_message_id) + 2} "
+                        f"where user_id = {event.obj.from_id}")
+                    conn.commit()
