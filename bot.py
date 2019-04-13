@@ -29,10 +29,6 @@ weekDays = [[0, 'понедельник'],
             [5, 'суббота'],
             [6, 'воскресенье']]
 
-days = []
-timez = []
-z = 0
-
 pupil_id = 0
 chat_counter = 0
 chat_isOver = 1
@@ -793,26 +789,68 @@ def grade(message: Message):
 
 
 def timetable(message: Message):
+    cursor.execute(
+        f"select days from teachers "
+        f"where teacher_id = {message.chat.id}")
+    db_days = cursor.fetchone()[0]
 
-    for weekDay in weekDays:
-        if weekDay[1] in message.text.lower():
-            if ',' in message.text:
-                days.append(message.text.lower().split(', '))
-            else:
-                days.append(message.text.lower())
+    cursor.execute(
+        f"select counter from teachers "
+        f"where teacher_id = {message.chat.id}")
+    counter = cursor.fetchone()[0]
 
-    if z != len(days[0]):
-        bot.send_message(message.chat.id,
-                         f'Введите через запятую, в какое время в {days[0][z]} вы хотели бы работать.')
-        bot.register_next_step_handler(message, time_in_timetable)
+    cursor.execute(
+        f"select times from teachers "
+        f"where teacher_id = {message.chat.id}")
+    work_times = cursor.fetchone()[0].split('/')
+
+    work_days = []
+
+    if db_days != '':
+        for weekDay2 in weekDays:
+            if weekDay2[1] in db_days.lower():
+                if ',' in db_days.lower():
+                    work_days = db_days.split(', ')
+                    break
+                else:
+                    work_days.append(db_days)
+                    break
     else:
-        k = 0
+        for weekDay2 in weekDays:
+            if weekDay2[1] in message.text.lower():
+                if ',' in message.text:
+                    work_days = message.text.lower().split(', ')
+                    cursor.execute(f"update teachers set days = '{message.text.lower()}'"
+                                   f"where teacher_id = {message.chat.id}")
+                    conn.commit()
+                    break
+                else:
+                    work_days.append(message.text.lower())
+                    cursor.execute(f"update teachers set days = '{message.text.lower()}'"
+                                   f"where teacher_id = {message.chat.id}")
+                    conn.commit()
+                    break
+
+    print(work_days)
+
+    if counter < len(work_days):
+        bot.send_message(message.chat.id,
+                         f'Введите через запятую, в какое время в {work_days[counter]} вы хотели бы работать.')
+        bot.register_next_step_handler(message, time_in_timetable)
+
+    else:
+        k = 1
         text = ''
 
-        for day in days[0]:
+        times = []
+
+        for time in work_times:
+            times.append(time.split(', '))
+
+        for day in work_days:
             time_text = ''
-            for times in timez[k]:
-                time_text += times + ', '
+            for time in times[k]:
+                time_text += time + ', '
 
             text += f'В {day} в: {time_text}\n'
             k += 1
@@ -825,33 +863,75 @@ def timetable(message: Message):
 
 
 def time_in_timetable(message: Message):
-    global z
-    z += 1
-    timez.append(message.text.split(', '))
+    cursor.execute(
+        f"update teachers set counter = counter + 1 "
+        f"where teacher_id = {message.chat.id}")
+    cursor.execute(
+        f"update teachers set times = CONCAT_WS('/', times, '{message.text}') "
+        f"where teacher_id = {message.chat.id}")
+    conn.commit()
 
     timetable(message)
 
 
 def create_timetable(information):
-    k = 0
-    for day in days[0]:
-        for weekDay in weekDays:
-            if day == weekDay[1]:
-                day = weekDay[0]
+    cursor.execute(
+        f"select days from teachers "
+        f"where teacher_id = {information.message.chat.id}")
+    db_days = cursor.fetchone()[0]
 
-        for time in timez[k]:
+    cursor.execute(
+        f"select times from teachers "
+        f"where teacher_id = {information.message.chat.id}")
+    work_times = cursor.fetchone()[0].split('/')
+
+    work_days = []
+
+    for weekDay2 in weekDays:
+        if weekDay2[1] in db_days.lower():
+            if ',' in db_days.lower():
+                work_days = db_days.split(', ')
+                break
+            else:
+                work_days.append(db_days)
+                break
+
+    times = []
+
+    for time in work_times:
+        times.append(time.split(', '))
+
+    k = 1
+    for day in work_days:
+        for weekDay2 in weekDays:
+            if day == weekDay2[1]:
+                day = weekDay2[0]
+
+        for time in times[k]:
             cursor.execute('SELECT * FROM teachers')
             data_arr = cursor.fetchall()
 
             for data in data_arr:
-                if data[0] == information.from_user.id:
+                if data[0] == information.message.chat.id:
                     cursor.execute(f"insert into paid_webinars values ({day}, "
                                    f"'{time}', '{data[2]}', {data[0]},"
                                    f" '{data[1]}', '0')")
                     conn.commit()
+                    break
         k += 1
+
+    cursor.execute(f"update teachers set is_created_timetable = '1' "
+                   f"where teacher_id = {information.message.chat.id}")
+    cursor.execute(
+        f"update teachers set days = '', "
+        f"counter = 0, "
+        f"times = '' "
+        f"where teacher_id = {information.message.chat.id}")
+    conn.commit()
+
     bot.edit_message_text("График занятий создан", information.message.chat.id,
                           information.message.message_id)
+    start_command(information.message)
 
 
 def pupils(information):
