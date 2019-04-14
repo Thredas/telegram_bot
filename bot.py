@@ -29,10 +29,6 @@ weekDays = [[0, 'понедельник'],
             [5, 'суббота'],
             [6, 'воскресенье']]
 
-pupil_id = 0
-chat_counter = 0
-chat_isOver = 1
-
 server = Flask(__name__)
 
 
@@ -155,17 +151,13 @@ def teacher_chat(information):
     cursor.execute('SELECT * FROM teachers')
     teachers = cursor.fetchall()
 
-    global pupil_id
-    pupil_id = information.data.split('/')[1]
-
     for teacher in teachers:
         if teacher[0] == information.from_user.id:
-
-            global chat_isOver
-            chat_isOver = 0
+            cursor.execute("update teachers set chat_is_over = 0 "
+                           f"where teacher_id = {information.from_user.id}")
 
             bot.edit_message_reply_markup(information.message.chat.id, information.message.message_id, reply_markup=None)
-            bot.send_message(teacher[0], 'Вы начали чат с ученикои. '
+            bot.send_message(teacher[0], 'Вы начали чат с учеником. '
                                          'Все ваши следующие сообщения боту будут адресованы ученику.'
                                          ' Чат не прекратится, '
                                          'пока вы не напишите слово "Конец" (без кавычек).')
@@ -174,29 +166,48 @@ def teacher_chat(information):
 
 
 def teacher_chat2(message):
-    cursor.execute('SELECT * FROM teachers')
-    teachers = cursor.fetchall()
+    cursor.execute(f'SELECT * FROM teachers WHERE teacher_id = {message.from_user.id}')
+    data_arr = cursor.fetchall()[0]
 
-    global chat_isOver
+    cursor.execute(f'SELECT chat_is_over FROM teachers WHERE teacher_id = {message.from_user.id}')
+    chat_is_over = cursor.fetchone()[0]
 
-    for teacher in teachers:
-        if teacher[0] == message.from_user.id:
-            if chat_isOver == 0:
-                if message.text.lower() == 'конец':
-                    chat_isOver = 1
-                    bot.send_message(message.from_user.id, 'Чат окончен')
+    cursor.execute(f'SELECT pupil_id FROM teachers WHERE teacher_id = {message.from_user.id}')
+    pupil_id1 = cursor.fetchone()[0]
 
-                elif '/' in message.text.lower():
-                    bot.send_message(message.from_user.id, 'Запрещенный в чате знак "/"')
-                    bot.register_next_step_handler(message, chat2)
+    if data_arr[0] == message.from_user.id:
+        if chat_is_over == 0:
+            if message.text.lower() == 'конец':
+                cursor.execute(
+                    f"update Users set chat_is_over = 1 "
+                    f"where user_id = {pupil_id1}")
+                cursor.execute(
+                    f"update Users set chat_counter = 0 "
+                    f"where user_id = {pupil_id1}")
+                cursor.execute(
+                    f"update teachers set chat_is_over = 1 "
+                    f"where teacher_id = {message.from_user.id}")
+                cursor.execute(
+                    f"update teachers set pupil_id = 0 "
+                    f"where teacher_id = {message.from_user.id}")
+                conn.commit()
 
-                else:
-                    bot.send_message(pupil_id, message.text)
-                    bot.register_next_step_handler(message, teacher_chat2)
-                break
+                bot.send_message(message.from_user.id, 'Чат окончен.')
+                bot.send_message(pupil_id1, 'Учитель закончил чат.')
+
+            elif '/' in message.text.lower():
+                bot.send_message(message.from_user.id, 'Запрещенный в чате знак "/"')
+                bot.register_next_step_handler(message, teacher_chat2)
 
             else:
-                bot.send_message(message.from_user.id, 'Чат окончен')
+                cursor.execute(
+                    f"update Users set chat_counter = chat_counter + 1 "
+                    f"where user_id = {pupil_id1}")
+
+                bot.send_message(pupil_id1, message.text)
+                bot.register_next_step_handler(message, teacher_chat2)
+        else:
+            bot.send_message(message.from_user.id, 'Чат окончен')
 
 
 @bot.message_handler(commands=['chat'])
@@ -208,8 +219,9 @@ def chat(message: Message):
     if len(data_arr) > 0:
         for data in data_arr:
             if data[0] == message.from_user.id:
-                global chat_isOver
-                chat_isOver = 0
+                cursor.execute("update Users set chat_is_over = 0 "
+                               f"where user_id = {message.from_user.id}")
+                conn.commit()
 
                 bot.send_message(message.from_user.id, 'Вы начали чат с учителем. '
                                                        'Все ваши следующие сообщения боту будут адресованы учителю.'
@@ -224,42 +236,69 @@ def chat(message: Message):
 
 
 def chat2(message: Message):
-    cursor.execute('SELECT * FROM Users')
-    data_arr = cursor.fetchall()
+    cursor.execute(f'SELECT * FROM Users WHERE user_id = {message.from_user.id}')
+    data_arr = cursor.fetchall()[0]
 
-    global chat_isOver
+    cursor.execute(f'SELECT chat_is_over FROM Users WHERE user_id = {message.from_user.id}')
+    chat_is_over = cursor.fetchone()[0]
 
-    for data in data_arr:
-        if data[0] == message.from_user.id:
-            if chat_isOver == 0:
-                if message.text.lower() == 'конец':
-                    global chat_counter
-                    chat_counter = 0
+    cursor.execute(f'SELECT chat_counter FROM Users WHERE user_id = {message.from_user.id}')
+    chat_counter1 = cursor.fetchone()[0]
 
-                    chat_isOver = 1
-                    bot.send_message(message.from_user.id, 'Чат окончен')
+    print(chat_is_over)
 
-                elif '/' in message.text.lower():
-                    bot.send_message(message.from_user.id, 'Запрещенный в чате знак "/"')
-                    bot.register_next_step_handler(message, chat2)
-                else:
-                    if chat_counter == 0:
+    if data_arr[0] == message.from_user.id:
+        if chat_is_over == 0:
+            if message.text.lower() == 'конец':
+                cursor.execute(
+                    f"update Users set chat_is_over = 1 "
+                    f"where user_id = {message.from_user.id}")
+                cursor.execute(
+                    f"update Users set chat_counter = 0 "
+                    f"where user_id = {message.from_user.id}")
+                cursor.execute(
+                    f"update teachers set chat_is_over = 1 "
+                    f"where teacher_id = {data_arr[5]}")
+                cursor.execute(
+                    f"update teachers set pupil_id = 0 "
+                    f"where teacher_id = {data_arr[5]}")
+                conn.commit()
 
-                        chat_counter += 1
-
-                        keyboard = InlineKeyboardMarkup()
-                        keyboard.add(InlineKeyboardButton('Начать', callback_data='chat/' + str(data[0])))
-
-                        bot.send_message(data[5],
-                                         f'Сообщение от ученика по имени {data[1]}:\n\n"{message.text}"\n\nНачать чат?',
-                                         reply_markup=keyboard)
-                    else:
-                        bot.send_message(data[5], message.text)
-
-                    bot.register_next_step_handler(message, chat2)
-                break
-            else:
                 bot.send_message(message.from_user.id, 'Чат окончен')
+                bot.send_message(data_arr[5], 'Ученик закончил чат.')
+
+            elif '/' in message.text.lower():
+                bot.send_message(message.from_user.id, 'Запрещенный в чате знак "/"')
+                bot.register_next_step_handler(message, chat2)
+
+            else:
+                if chat_counter1 == 0:
+                    cursor.execute(
+                        f"update Users set chat_counter = chat_counter + 1 "
+                        f"where user_id = {message.from_user.id}")
+                    conn.commit()
+
+                    keyboard = InlineKeyboardMarkup()
+                    keyboard.add(InlineKeyboardButton('Начать', callback_data='chat/' + str(data_arr[0])))
+
+                    bot.send_message(data_arr[5],
+                                     f"Ученик по имени {data_arr[1]} хочет начать чат со следующим сообщением:"
+                                     f"\n\n'{message.text}'\n\n Хотите начать чат?",
+                                     reply_markup=keyboard)
+
+                elif chat_counter1 == 1:
+                    bot.send_message(message.from_user.id, f'Подождите, пока учитель не начнет чат с вами.')
+
+                else:
+                    bot.send_message(data_arr[5], message.text)
+
+                bot.register_next_step_handler(message, chat2)
+                cursor.execute(
+                    f"update teachers set pupil_id = {message.from_user.id} "
+                    f"where teacher_id = {data_arr[5]}")
+                conn.commit()
+        else:
+            bot.send_message(message.from_user.id, 'Чат окончен')
 
 
 # Функции ученика

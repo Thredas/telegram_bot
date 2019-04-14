@@ -671,12 +671,17 @@ def time_pick(evento):
                                          f"Вот контакт вашего учителя: {i[2]}\n"
                                          f"Cвяжитесь с ним в Skype в выбранное время.",
                                          random_id=get_random_id())
-
                         print('message modified')
 
                         for weekDay2 in weekDays:
                             if evento.obj.text[0] == str(weekDay2[0]):
                                 evento.obj.text[0] = weekDay2[1]
+
+                        vk.messages.send(peer_id=i[3],
+                                         message=f"На занятия записался "
+                                         f"{vk.users.get(user_ids=evento.obj.from_id)[0]['first_name']}\n"
+                                         f'День недели: {evento.obj.text[0]}, время: {evento.obj.text[1]}',
+                                         random_id=get_random_id())
 
                         cursor.execute('SELECT * FROM Users')
                         data_arr = cursor.fetchall()
@@ -743,11 +748,18 @@ def time_pick(evento):
                                              f"Вот контакт вашего учителя: {i[2]}\n"
                                              f"Cвяжитесь с ним в Skype в выбранное время.",
                                              random_id=get_random_id())
+
                             print('message modified')
 
                             for weekDay2 in weekDays:
                                 if evento.obj.text[0] == str(weekDay2[0]):
                                     evento.obj.text[0] = weekDay2[1]
+
+                            vk.messages.send(peer_id=i[3],
+                                             message=f"На занятия записался "
+                                             f"{vk.users.get(user_ids=evento.obj.from_id)[0]['first_name']}\n"
+                                             f'День недели: {evento.obj.text[0]}, время: {evento.obj.text[1]}',
+                                             random_id=get_random_id())
 
                             cursor.execute('SELECT * FROM Users')
                             data_arr = cursor.fetchall()
