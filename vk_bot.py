@@ -284,7 +284,6 @@ def create_timetable(evento):
     vk.messages.send(peer_id=evento.obj.from_id,
                      message="График занятий создан",
                      random_id=get_random_id())
-    start_command(evento)
 
 
 def text_is_correct(text, isTime):
@@ -360,6 +359,166 @@ def pupils(evento):
 
 
 # Чат
+
+
+def chat(evento):
+    cursor.execute(f'SELECT * FROM Users WHERE user_id = {evento.obj.from_id}')
+    data_arr = cursor.fetchone()
+
+    if len(data_arr) > 0:
+        if data_arr[0] == evento.obj.from_id:
+            cursor.execute("update Users set chat_is_over = 0 "
+                           f"where user_id = {evento.obj.from_id}")
+
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message='Вы начали чат с учителем. '
+                                     'Все ваши следующие сообщения боту будут адресованы учителю.'
+                                     ' Чат не прекратится, '
+                                     'пока вы не напишите слово "Конец" (без кавычек).',
+                             random_id=get_random_id())
+
+            cursor.execute(
+                f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                f"where user_id = {evento.obj.from_id}")
+            conn.commit()
+        else:
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message='Сначала запишитесь на занятия',
+                             random_id=get_random_id())
+    else:
+        vk.messages.send(peer_id=evento.obj.from_id,
+                         message='Сначала запишитесь на занятия',
+                         random_id=get_random_id())
+
+
+def chat2(evento):
+    cursor.execute(f'SELECT * FROM Users WHERE user_id = {evento.obj.from_id}')
+    data_arr = cursor.fetchall()[0]
+
+    cursor.execute(f'SELECT chat_counter FROM Users WHERE user_id = {evento.obj.from_id}')
+    chat_counter1 = cursor.fetchone()[0]
+
+    if data_arr[0] == evento.obj.from_id:
+        if evento.obj.text.lower() == 'конец':
+            cursor.execute(
+                f"update Users set chat_is_over = 1 "
+                f"where user_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update Users set chat_counter = 0 "
+                f"where user_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update teachers set chat_is_over = 1 "
+                f"where teacher_id = {data_arr[5]}")
+            cursor.execute(
+                f"update teachers set pupil_id = 0 "
+                f"where teacher_id = {data_arr[5]}")
+            conn.commit()
+
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message='Чат окончен',
+                             random_id=get_random_id())
+            vk.messages.send(peer_id=data_arr[5],
+                             message='Ученик закончил чат.',
+                             random_id=get_random_id())
+        else:
+            if chat_counter1 == 0:
+                cursor.execute(
+                   f"update Users set chat_counter = chat_counter + 1 "
+                   f"where user_id = {evento.obj.from_id}")
+                conn.commit()
+
+                vk.messages.send(peer_id=data_arr[5],
+                                 message=f"Ученик по имени {data_arr[1]} хочет начать чат со следующим сообщением:"
+                                 f"\n\n'{evento.obj.text}'\n\n Введите 'Начать чат', если хотите начать чат с ним.",
+                                 random_id=get_random_id())
+
+            elif chat_counter1 == 1:
+                vk.messages.send(peer_id=evento.obj.from_id,
+                                 message=f'Подождите, пока учитель не начнет чат с вами.',
+                                 random_id=get_random_id())
+
+            else:
+                vk.messages.send(peer_id=data_arr[5],
+                                 message=evento.obj.text,
+                                 random_id=get_random_id())
+
+                cursor.execute(
+                    f"update Users set previous_message_id = {evento.obj.conversation_message_id} "
+                    f"where user_id = {evento.obj.from_id}")
+
+            cursor.execute(
+                f"update teachers set pupil_id = {evento.obj.from_id} "
+                f"where teacher_id = {data_arr[5]}")
+            conn.commit()
+    else:
+        vk.messages.send(peer_id=evento.obj.from_id,
+                         message='Чат окончен',
+                         random_id=get_random_id())
+
+
+def teacher_chat(evento):
+    cursor.execute("update teachers set chat_is_over = 0 "
+                   f"where teacher_id = {evento.obj.from_id}")
+
+    vk.messages.send(peer_id=evento.obj.from_id,
+                     message='Вы начали чат с учеником. '
+                             'Все ваши следующие сообщения боту будут адресованы ученику.'
+                             ' Чат не прекратится, '
+                             'пока вы не напишите слово "Конец" (без кавычек).',
+                     random_id=get_random_id())
+
+    cursor.execute(
+        f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+        f"where teacher_id = {evento.obj.from_id}")
+    conn.commit()
+
+
+def teacher_chat2(evento):
+    cursor.execute(f'SELECT * FROM teachers WHERE teacher_id = {evento.obj.from_id}')
+    data_arr = cursor.fetchall()[0]
+
+    cursor.execute(f'SELECT pupil_id FROM teachers WHERE teacher_id = {evento.obj.from_id}')
+    pupil_id1 = cursor.fetchone()[0]
+
+    if data_arr[0] == evento.obj.from_id:
+        if evento.obj.text.lower() == 'конец':
+            cursor.execute(
+                f"update Users set chat_is_over = 1 "
+                f"where user_id = {pupil_id1}")
+            cursor.execute(
+                f"update Users set chat_counter = 0 "
+                f"where user_id = {pupil_id1}")
+            cursor.execute(
+                f"update teachers set chat_is_over = 1 "
+                f"where teacher_id = {evento.obj.from_id}")
+            cursor.execute(
+                f"update teachers set pupil_id = 0 "
+                f"where teacher_id = {evento.obj.from_id}")
+            conn.commit()
+
+            vk.messages.send(peer_id=evento.obj.from_id,
+                             message='Чат окончен.',
+                             random_id=get_random_id())
+            vk.messages.send(peer_id=pupil_id1,
+                             message='Учитель закончил чат.',
+                             random_id=get_random_id())
+        else:
+            cursor.execute(
+                f"update Users set chat_counter = chat_counter + 1 "
+                f"where user_id = {pupil_id1}")
+
+            vk.messages.send(peer_id=pupil_id1,
+                             message=evento.obj.text,
+                             random_id=get_random_id())
+
+            cursor.execute(
+                    f"update teachers set previous_message_id = {evento.obj.conversation_message_id} "
+                    f"where teacher_id = {evento.obj.from_id}")
+            conn.commit()
+    else:
+        vk.messages.send(peer_id=evento.obj.from_id,
+                         message='Чат окончен',
+                         random_id=get_random_id())
 
 
 # Функции ученика
@@ -978,130 +1137,161 @@ for event in longpoll.listen():
 
         if event.type == VkBotEventType.MESSAGE_NEW:
 
-            if event.obj.text.lower() == 'начать':
-                start_command(event)
-            elif event.obj.text.lower() == 'домашняя работа':
-                home_work(event)
-            elif event.obj.text.lower() == 'оценка':
-                grade(event)
-
             cursor.execute(f"SELECT teacher_id FROM teachers")
             teacher_ids = cursor.fetchall()
 
             for teacher_id in teacher_ids:
                 if teacher_id[0] == event.obj.from_id:
-                    cursor.execute(f"SELECT previous_message_id FROM teachers WHERE teacher_id = {event.obj.from_id}")
-                    previous_message_id = cursor.fetchone()
-                    cursor.execute(f'SELECT callback FROM teachers WHERE teacher_id = {event.obj.from_id}')
-                    callback = cursor.fetchone()
+                    cursor.execute(f"SELECT chat_is_over FROM teachers WHERE teacher_id = {event.obj.from_id}")
                     break
             else:
-                cursor.execute(f"SELECT previous_message_id FROM Users WHERE user_id = {event.obj.from_id}")
-                previous_message_id = cursor.fetchone()
-                cursor.execute(f'SELECT callback FROM Users WHERE user_id = {event.obj.from_id}')
-                callback = cursor.fetchone()
+                cursor.execute(f"SELECT chat_is_over FROM Users WHERE user_id = {event.obj.from_id}")
 
-            if event.obj.conversation_message_id == previous_message_id[0] + 2:
+            chat_isOver = cursor.fetchone()[0]
 
-                if event.obj.text.lower() == 'создать график занятий':
-                    cursor.execute('SELECT * FROM teachers')
-                    row2 = cursor.fetchall()
-                    for teacher in row2:
-                        if event.obj.from_id == teacher[0]:
-                            if teacher[3] == 1:
-                                print('teacher 1')
-                                cursor.execute(f"DELETE FROM `paid_webinars` WHERE `teacher_id`={event.obj.from_id}")
+            if chat_isOver == 0:
+                cursor.execute(f"SELECT teacher_id FROM teachers")
+                teacher_ids = cursor.fetchall()
 
-                                cursor.execute(f"update Users set lesson_weekday = '',"
-                                               f"lesson_time = '' "
-                                               f"where teacher_id = {event.obj.from_id}")
-
-                                cursor.execute(f"update teachers set is_created_timetable = '0' "
-                                               f"where teacher_id = {event.obj.from_id}")
-                                conn.commit()
-
-                            vk.messages.send(peer_id=event.obj.from_id,
-                                             message='При повторном вводе этой команды все предыдущие записи '
-                                                     'о занятиях будут стерты.\n'
-                                                     'Введите через запятую, в какие дни вы хотели бы работать.'
-                                                     '\n\n'
-                                                     'Например: Понедельник, вторник, пятница',
-                                             random_id=get_random_id())
-                            cursor.execute(
-                                f"update teachers set previous_message_id = {event.obj.conversation_message_id} "
-                                f"where teacher_id = {event.obj.from_id}")
-                            cursor.execute(
-                                f"update teachers set callback = 'timetable' "
-                                f"where teacher_id = {event.obj.from_id}")
-                            conn.commit()
-
+                for teacher_id in teacher_ids:
+                    if teacher_id[0] == event.obj.from_id:
+                        teacher_chat2(event)
                         break
-
-                elif event.obj.text.lower() == 'посмотреть записанных учеников':
-                    pupils(event)
-
-                elif ':' in event.obj.text.lower():
-                    if callback[0] == 'time_in_timetable':
-                        time_in_timetable(event)
-                    else:
-                        time_pick(event)
-
-                elif event.obj.text.lower() == 'да':
-                    if callback[0] == 'continue':
-                        continue_study(event)
-                    elif callback[0] == 'buy':
-                        buy(event)
-                    elif callback[0] == 'create_timetable':
-                        create_timetable(event)
-
-                elif event.obj.text.lower() == 'выбрать нового' or event.obj.text.lower() == 'оставить текущего':
-                    if event.obj.text.lower() == 'выбрать нового':
-                        callback[0] = 'teacher_pick_new'
-                    else:
-                        callback[0] = 'teacher_pick_old'
-                    teacher_pick(event)
-
-                elif event.obj.text.lower() == 'нет':
-                    previous_message_id = 0
-                    callback = ''
-                    days = []
-                    timez = []
-                    z = 0
-                    pupil_id = 0
-                    chat_counter = 0
-                    chat_isOver = 1
+                else:
+                    chat2(event)
+            else:
+                if event.obj.text.lower() == 'начать':
                     start_command(event)
+                elif event.obj.text.lower() == 'домашняя работа':
+                    home_work(event)
+                elif event.obj.text.lower() == 'оценка':
+                    grade(event)
+                elif event.obj.text.lower() == 'чат':
+                    chat(event)
+                elif event.obj.text.lower() == 'начать чат':
+                    cursor.execute(f"SELECT teacher_id FROM teachers")
+                    teacher_ids = cursor.fetchall()
 
-                elif callback[0] == 'weekday_pick':
-                    cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
-                    row2 = cursor.fetchall()
-                    for weekDay in weekDays:
-                        if weekDay[1] in event.obj.text.lower():
-                            for data2 in row2:
-                                if weekDay[0] == data2[0]:
-                                    cursor.execute(
-                                        f"update Users set callback = '{weekDay[1]}/{data2[3]}' "
-                                        f"where user_id = {event.obj.from_id}")
-                                    conn.commit()
-                                    weekday_pick(event, weekDay)
-                                    break
-
-                elif callback[0] == 'timetable':
-                    timetable(event)
-
-                elif callback[0] == 'teacher_pick_new':
-                    cursor.execute('SELECT * FROM teachers')
-                    row2 = cursor.fetchall()
-                    for teacher in row2:
-                        if event.obj.text == str(teacher[1]):
-                            teacher_pick2(event)
+                    for teacher_id in teacher_ids:
+                        if teacher_id[0] == event.obj.from_id:
+                            teacher_chat(event)
                             break
 
+                for teacher_id in teacher_ids:
+                    if teacher_id[0] == event.obj.from_id:
+                        cursor.execute(
+                            f"SELECT previous_message_id FROM teachers WHERE teacher_id = {event.obj.from_id}")
+                        previous_message_id = cursor.fetchone()
+                        cursor.execute(f'SELECT callback FROM teachers WHERE teacher_id = {event.obj.from_id}')
+                        callback = cursor.fetchone()
+                        break
                 else:
-                    vk.messages.send(peer_id=event.obj.from_id,
-                                     message='Введите сообщение правильно',
-                                     random_id=get_random_id())
-                    cursor.execute(
-                        f"update Users set previous_message_id = {int(event.obj.conversation_message_id) + 2} "
-                        f"where user_id = {event.obj.from_id}")
-                    conn.commit()
+                    cursor.execute(f"SELECT previous_message_id FROM Users WHERE user_id = {event.obj.from_id}")
+                    previous_message_id = cursor.fetchone()
+                    cursor.execute(f'SELECT callback FROM Users WHERE user_id = {event.obj.from_id}')
+                    callback = cursor.fetchone()
+
+                if event.obj.conversation_message_id == previous_message_id[0] + 2:
+
+                    if event.obj.text.lower() == 'создать график занятий':
+                        cursor.execute('SELECT * FROM teachers')
+                        row2 = cursor.fetchall()
+                        for teacher in row2:
+                            if event.obj.from_id == teacher[0]:
+                                if teacher[3] == 1:
+                                    print('teacher 1')
+                                    cursor.execute(
+                                        f"DELETE FROM `paid_webinars` WHERE `teacher_id`={event.obj.from_id}")
+
+                                    cursor.execute(f"update Users set lesson_weekday = '',"
+                                                   f"lesson_time = '' "
+                                                   f"where teacher_id = {event.obj.from_id}")
+
+                                    cursor.execute(f"update teachers set is_created_timetable = '0' "
+                                                   f"where teacher_id = {event.obj.from_id}")
+                                    conn.commit()
+
+                                vk.messages.send(peer_id=event.obj.from_id,
+                                                 message='При повторном вводе этой команды все предыдущие записи '
+                                                         'о занятиях будут стерты.\n'
+                                                         'Введите через запятую, в какие дни вы хотели бы работать.'
+                                                         '\n\n'
+                                                         'Например: Понедельник, вторник, пятница',
+                                                 random_id=get_random_id())
+                                cursor.execute(
+                                    f"update teachers set previous_message_id = {event.obj.conversation_message_id} "
+                                    f"where teacher_id = {event.obj.from_id}")
+                                cursor.execute(
+                                    f"update teachers set callback = 'timetable' "
+                                    f"where teacher_id = {event.obj.from_id}")
+                                conn.commit()
+                            break
+
+                    elif event.obj.text.lower() == 'посмотреть записанных учеников':
+                        pupils(event)
+
+                    elif ':' in event.obj.text.lower():
+                        if callback[0] == 'time_in_timetable':
+                            time_in_timetable(event)
+                        else:
+                            time_pick(event)
+
+                    elif event.obj.text.lower() == 'да':
+                        if callback[0] == 'continue':
+                            continue_study(event)
+                        elif callback[0] == 'buy':
+                            buy(event)
+                        elif callback[0] == 'create_timetable':
+                            create_timetable(event)
+
+                    elif event.obj.text.lower() == 'выбрать нового' or event.obj.text.lower() == 'оставить текущего':
+                        if event.obj.text.lower() == 'выбрать нового':
+                            callback[0] = 'teacher_pick_new'
+                        else:
+                            callback[0] = 'teacher_pick_old'
+                        teacher_pick(event)
+
+                    elif event.obj.text.lower() == 'нет':
+                        previous_message_id = 0
+                        callback = ''
+                        days = []
+                        timez = []
+                        z = 0
+                        pupil_id = 0
+                        chat_counter = 0
+                        chat_isOver = 1
+                        start_command(event)
+
+                    elif callback[0] == 'weekday_pick':
+                        cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay')
+                        row2 = cursor.fetchall()
+                        for weekDay in weekDays:
+                            if weekDay[1] in event.obj.text.lower():
+                                for data2 in row2:
+                                    if weekDay[0] == data2[0]:
+                                        cursor.execute(
+                                            f"update Users set callback = '{weekDay[1]}/{data2[3]}' "
+                                            f"where user_id = {event.obj.from_id}")
+                                        conn.commit()
+                                        weekday_pick(event, weekDay)
+                                        break
+
+                    elif callback[0] == 'timetable':
+                        timetable(event)
+
+                    elif callback[0] == 'teacher_pick_new':
+                        cursor.execute('SELECT * FROM teachers')
+                        row2 = cursor.fetchall()
+                        for teacher in row2:
+                            if event.obj.text == str(teacher[1]):
+                                teacher_pick2(event)
+                                break
+
+                    else:
+                        vk.messages.send(peer_id=event.obj.from_id,
+                                         message='Введите сообщение правильно',
+                                         random_id=get_random_id())
+                        cursor.execute(
+                            f"update Users set previous_message_id = {int(event.obj.conversation_message_id) + 2} "
+                            f"where user_id = {event.obj.from_id}")
+                        conn.commit()
