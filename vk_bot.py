@@ -599,13 +599,13 @@ def weekday_pick(evento, weekdayfromarr):
                 cursor.execute(f"insert into Users values ({int(evento.obj.from_id)}, "
                                f"'{str(vk.users.get(user_ids=evento.obj.from_id)[0]['first_name'])}', "
                                f"0, '{callback_data[0]}',"
-                               f" '0:00', '{callback_data[1]}', 1, '')")
+                               f" '0:00', '{callback_data[1]}', 1, 0)")
                 conn.commit()
         else:
             cursor.execute(f"insert into Users values ({int(evento.obj.from_id)}, "
                            f"'{str(vk.users.get(user_ids=evento.obj.from_id)[0]['first_name'])}', 0, "
                            f"'{callback_data[0]}', "
-                           f"'0:00', '{callback_data[1]}', 1, '')")
+                           f"'0:00', '{callback_data[1]}', 1, 0)")
             conn.commit()
 
         cursor.execute('SELECT * FROM paid_webinars ORDER BY time')

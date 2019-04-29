@@ -367,12 +367,12 @@ def weekday_pick(information, weekdayfromarr):
         else:
             cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
                            f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
-                           f" '0:00', '{callback[1]}', 1, "")")
+                           f" '0:00', '{callback[1]}', 1, 0)")
             conn.commit()
     else:
         cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
                        f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
-                       f" '0:00', '{callback[1]}', 1, "")")
+                       f" '0:00', '{callback[1]}', 1, 0)")
         conn.commit()
 
     cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay, time')
