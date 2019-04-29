@@ -333,7 +333,7 @@ def new_user(message):
             keyboard.add(
                 InlineKeyboardButton(weekDays[i][1].capitalize(), callback_data=f'{weekDays[i][1]}/{row[i][3]}'))
 
-        bot.send_message(message.chat.id, 'Зравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
+        bot.send_message(message.chat.id, 'Здравствуйте, давайте согласуем дату и время первого демо-занятия.\n\n'
                                           'На какой день недели вы хотели бы записаться?', reply_markup=keyboard)
 
     else:
@@ -367,12 +367,12 @@ def weekday_pick(information, weekdayfromarr):
         else:
             cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
                            f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
-                           f" '0:00', '{callback[1]}')")
+                           f" '0:00', '{callback[1]}', 1, "")")
             conn.commit()
     else:
         cursor.execute(f"insert into Users values ({int(information.from_user.id)}, "
                        f"'{str(information.from_user.first_name)}', 0, '{callback[0]}',"
-                       f" '0:00', '{callback[1]}')")
+                       f" '0:00', '{callback[1]}', 1, "")")
         conn.commit()
 
     cursor.execute('SELECT * FROM paid_webinars ORDER BY weekDay, time')
@@ -549,7 +549,7 @@ def buy(information):
                     bot.send_invoice(
                         information.message.chat.id,
                         title='Продолжение курса',
-                        description='Чтобы продолжить обучение, заплатите за следующие 12 вебинаров.',
+                        description='Чтобы продолжить обучение, заплатите за следующие 12 уроков.',
                         provider_token=PAYMENTS_PROVIDER_TOKEN,
                         currency='RUB',
                         photo_url='https://www.instituteiba.by/upload/medialibrary/5f5/'
@@ -871,7 +871,7 @@ def timetable(message: Message):
                         break
         else:
             bot.send_message(message.chat.id,
-                             f'Введите день недели праильно.')
+                             f'Введите день недели правильно.')
             bot.register_next_step_handler(message, timetable)
 
     print(work_days)
@@ -919,7 +919,7 @@ def time_in_timetable(message: Message):
         timetable(message)
     else:
         bot.send_message(message.chat.id,
-                         f'Введите время праильно.')
+                         f'Введите время правильно.')
         bot.register_next_step_handler(message, time_in_timetable)
 
 
